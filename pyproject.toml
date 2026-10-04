@@ -1,0 +1,31 @@
+[project]
+name = "vis-optmem"
+version = "0.1.0"
+description = "Permanent memory for Vis agents, based on OptMem by Victor Taelin."
+keywords = ["memory", "agents"]
+requires-python = ">=3.11"
+dependencies = [
+  "vis-agent>=0.2.26",
+]
+
+[project.urls]
+Source = "https://github.com/Blockether/vis-optmem"
+OptMem = "https://github.com/VictorTaelin/OptMem"
+
+[dependency-groups]
+dev = ["pytest>=9", "ruff>=0.14"]
+
+[tool.vis]
+category = "tools"
+source_paths = ["src"]
+
+[tool.ruff]
+# The README aligns its examples for people to read; ruff must not reflow them.
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
+# Pinned so a new ruff default set cannot change the verdict of a release.
+select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]

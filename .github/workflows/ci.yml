@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: ruff + pytest (Python ${{ matrix.python }})
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.13"]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: ${{ matrix.python }}
+          enable-cache: true
+      - name: Install the declared dependencies
+        run: uv sync
+      - name: Check formatting
+        run: uv run ruff format --check .
+      - name: Lint
+        run: uv run ruff check .
+      - name: Run the tests
+        run: uv run --with pytest pytest tests -q
+
+  versions:
+    name: One version everywhere
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check that every version source agrees
+        run: |
+          set -euo pipefail
+          package=$(python3 -c "import tomllib,pathlib;print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
+          registered=$(python3 -c "import re,pathlib;print(re.search('version=\"([^\"]+)\"', pathlib.Path('extension.py').read_text()).group(1))")
+          if [ "$package" != "$registered" ]; then
+            echo "Package version $package disagrees with the registered extension version $registered." >&2
+            exit 1
+          fi
+          echo "Every version source says $package."

@@ -1,0 +1,9 @@
+vis-optmem
+Copyright 2026 Blockether
+
+vis-optmem uses the design and the file format of OptMem by Victor Taelin:
+https://github.com/VictorTaelin/OptMem
+
+The design includes the dated memory log, the tree of summaries and the fixed-size
+view that wake shows. vis-optmem is an independent Python implementation. It contains
+no OptMem source code or text.
