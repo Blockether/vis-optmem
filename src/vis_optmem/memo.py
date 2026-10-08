@@ -13,7 +13,7 @@ import json
 import os
 import re
 from collections import deque
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from importlib import metadata
 from pathlib import Path
@@ -58,6 +58,19 @@ VARIABLES = {
 }
 """The environment variables that choose each memory: folder, custom store, store config."""
 
+TOOLS = (
+    "init",
+    "wake",
+    "note",
+    "nap",
+    "recall",
+    "zoom",
+    "forget",
+    "config",
+    "import_memories",
+)
+"""Every memo tool. ``MEMORY_DISABLED_TOOLS`` can turn any of them off."""
+
 STORE_GROUP = "vis_optmem.stores"
 """Entry point group of named stores: ``MEMORY_STORE=<name>`` selects one."""
 
@@ -95,6 +108,31 @@ def _call(method: str, *args: str, scope: str = PERSONAL) -> str:
 
 class MemoryNotSet(LookupError):
     """No folder and no store is set for the memory of everyone."""
+
+
+class ToolDisabled(PermissionError):
+    """The person who set up the memory turned this tool off."""
+
+
+def disabled_tools(names: str | Iterable[str] | None = None) -> frozenset[str]:
+    """The tools that are turned off: ``names``, else ``$MEMORY_DISABLED_TOOLS``.
+
+    A string lists tool names separated by commas or spaces, like
+    ``init,import_memories``. An unknown name raises ValueError, so a typo cannot
+    leave a tool on.
+    """
+    if names is None:
+        names = os.environ.get("MEMORY_DISABLED_TOOLS", "")
+    if isinstance(names, str):
+        names = re.split(r"[\s,]+", names)
+    chosen = frozenset(name.strip() for name in names if name.strip())
+    unknown = sorted(chosen - set(TOOLS))
+    if unknown:
+        raise ValueError(
+            f"MEMORY_DISABLED_TOOLS: {', '.join(unknown)} is not a memo tool. "
+            f"Use names from: {', '.join(TOOLS)}."
+        )
+    return chosen
 
 
 def parse_block(block: str) -> tuple[int, int]:
@@ -409,10 +447,21 @@ class Memo:
         store: MemoryStore | Callable[[], MemoryStore] | None = None,
         everyone_directory: str | os.PathLike[str] | None = None,
         everyone_store: MemoryStore | Callable[[], MemoryStore] | None = None,
+        disabled: str | Iterable[str] | None = None,
     ) -> None:
         self._directory = {PERSONAL: directory, EVERYONE: everyone_directory}
         self._base = base
         self._custom = {PERSONAL: store, EVERYONE: everyone_store}
+        self._disabled = None if disabled is None else disabled_tools(disabled)
+
+    def _allow(self, tool: str) -> None:
+        """Raise ToolDisabled when ``tool`` is turned off."""
+        off = self._disabled if self._disabled is not None else disabled_tools()
+        if tool in off:
+            raise ToolDisabled(
+                f"{NAMESPACE}.{tool} is turned off in this setup (MEMORY_DISABLED_TOOLS). "
+                "Do not call it again."
+            )
 
     def _path(self, scope: str = PERSONAL) -> Path | None:
         folder, _, _ = VARIABLES[scope]
@@ -475,8 +524,13 @@ class Memo:
         store = self._store(scope)
         if not store.exists():
             folder, variable, _ = VARIABLES[scope]
+            off = self._disabled if self._disabled is not None else disabled_tools()
+            if "init" in off:
+                create = "Ask the person who set up the memory to create it."
+            else:
+                create = f"To create it, call {_call('init', scope=scope)}."
             raise FileNotFoundError(
-                f"No memory at {store.location}. To create it, call {_call('init', scope=scope)}. "
+                f"No memory at {store.location}. {create} "
                 f"To use another memory, set {folder} or {variable}."
             )
         store.prepare()
@@ -535,6 +589,7 @@ class Memo:
         A new folder is a new memory. So wake and note never create one: a wrong
         MEMORY_DIR stops them instead of starting an empty memory.
         """
+        self._allow("init")
         store = self._store(scope)
         is_new = store.create()
         store.sizes()
@@ -562,6 +617,7 @@ class Memo:
         the result has no lines and asks for that summary first. A complete read
         of the personal memory gives the call that reads the memory for everyone.
         """
+        self._allow("wake")
         store, sizes = self._open(scope)
         now = store.count()
         if part < 1:
@@ -644,6 +700,7 @@ class Memo:
         summary. Write it before your next action. Save to ``scope="everyone"``
         only what every person may read.
         """
+        self._allow("note")
         store, sizes = self._open(scope)
         line = check_line(memory, sizes["ENTRY_CHARS"], what="memory")
         date = datetime.date.today().isoformat()
@@ -668,6 +725,7 @@ class Memo:
         written in a fixed order, so a block other than the next one is refused.
         A summary that another session saved first is kept, not replaced.
         """
+        self._allow("nap")
         if (block is None) != (summary is None):
             raise ValueError("Give both block and summary, or neither.")
         store, sizes = self._open(scope)
@@ -712,6 +770,7 @@ class Memo:
         whole line, so it can also find an id or a date. When the matches do not
         fit one print, the result keeps the newest ones and gives the total.
         """
+        self._allow("recall")
         store, sizes = self._open(scope)
         try:
             regex = re.compile(pattern, re.IGNORECASE)
@@ -744,6 +803,7 @@ class Memo:
         Each half is a summary, or a memory when it holds one memory. Zoom again
         into a half to go down to single memories.
         """
+        self._allow("zoom")
         store, _ = self._open(scope)
         lo, hi = parse_block(block)
         total = store.count()
@@ -770,6 +830,7 @@ class Memo:
         Later summaries of the same sizes go too. The memories do not change,
         so memo.nap() asks for the dropped summaries again.
         """
+        self._allow("forget")
         store, _ = self._open(scope)
         lo, hi = parse_block(block)
         dropped = store.drop_summaries(lo, hi)
@@ -794,6 +855,7 @@ class Memo:
         ``changes`` maps size names to new values. None restores the default.
         Sizes only choose what is shown, so a change rewrites no memory.
         """
+        self._allow("config")
         store, _ = self._open(scope)
         overrides = store.overrides()
         changed = []
@@ -833,6 +895,7 @@ class Memo:
         before the newest memory. Empty lines are skipped. If one line is wrong,
         nothing is added.
         """
+        self._allow("import_memories")
         store, sizes = self._open(scope)
         source = Path(os.path.expanduser(path))
         try:

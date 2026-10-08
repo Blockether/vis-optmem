@@ -30,6 +30,7 @@ ENV = (
     "MEMORY_EVERYONE_DIR",
     "MEMORY_EVERYONE_STORE",
     "MEMORY_EVERYONE_STORE_CONFIG",
+    "MEMORY_DISABLED_TOOLS",
 )
 
 
@@ -262,3 +263,19 @@ def test_the_context_and_the_activity_show_the_memory_for_everyone(
     assert context["everyone"] == {"memories": 1, "summaries_due": 0, "max_bytes": 280}
     assert context["personal"]["store"] == "missing"
     assert 'scope="everyone"' in registered.prompt({"cwd": str(project)})
+
+
+def test_the_prompt_leaves_out_the_tools_that_are_turned_off(registered, monkeypatch):
+    assert "memo.forget(block" in registered.prompt({})
+    monkeypatch.setenv("MEMORY_DISABLED_TOOLS", "init,import_memories,forget")
+    prompt = registered.prompt({})
+    assert "memo.forget(block" not in prompt
+    assert "memo.note(memory" in prompt
+    assert prompt.endswith(
+        "- These tools are turned off here: memo.forget, memo.import_memories, "
+        "memo.init. Do not call them."
+    )
+    monkeypatch.setenv("MEMORY_DISABLED_TOOLS", "imports")
+    assert registered.prompt({}).endswith(
+        "Every memo tool fails until the setting is fixed."
+    )

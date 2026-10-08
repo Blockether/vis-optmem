@@ -38,6 +38,21 @@ Each tool takes `scope="personal"`, the default, or `scope="everyone"`. See
 Each result is a typed record with a `text` field. The agent prints the text and does what it says.
 A subagent does not use the memory. Its leader reads and writes it.
 
+### Turn tools off
+
+To stop agents from using some tools, list them in `MEMORY_DISABLED_TOOLS`, separated by commas.
+For example, a company memory that an administrator creates and fills needs no `init` and no
+`import_memories`:
+
+```yaml
+environment:
+  MEMORY_DISABLED_TOOLS: {literal: "init,import_memories"}
+```
+
+A tool that is turned off refuses each call, and the agent instructions leave it out. The other
+tools work as before. A name that is not a memo tool stops every tool, so a typo cannot leave a
+tool on. In Python, `Memo(disabled=["init"])` replaces the setting.
+
 ## How the memory works
 
 - Each memory is one dated line. A memory never changes.

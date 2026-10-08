@@ -2,7 +2,7 @@
 
 import blockether.vis.extension as vis
 
-from vis_optmem.memo import EVERYONE, Memo, status
+from vis_optmem.memo import EVERYONE, NAMESPACE, Memo, disabled_tools, status
 from vis_optmem.store import SIZES
 
 CONTENT_LIMIT = 4000
@@ -165,7 +165,21 @@ def _workspace(env):
 
 def _prompt(env):
     limit = status(base=_workspace(env)).get("max_bytes", DEFAULT_LIMIT)
-    return PROMPT.format(limit=limit)
+    text = PROMPT.format(limit=limit)
+    try:
+        off = disabled_tools()
+    except ValueError as error:
+        return f"{text}\n- {error} Every memo tool fails until the setting is fixed."
+    if not off:
+        return text
+    kept = [
+        line
+        for line in text.splitlines()
+        if not any(line.startswith(f"  {NAMESPACE}.{tool}(") for tool in off)
+    ]
+    names = ", ".join(f"{NAMESPACE}.{tool}" for tool in sorted(off))
+    kept.append(f"- These tools are turned off here: {names}. Do not call them.")
+    return "\n".join(kept)
 
 
 def _ctx(env):
@@ -197,6 +211,7 @@ vis.register_extension(
             "MEMORY_EVERYONE_DIR",
             "MEMORY_EVERYONE_STORE",
             "MEMORY_EVERYONE_STORE_CONFIG",
+            "MEMORY_DISABLED_TOOLS",
         ],
     )
 )

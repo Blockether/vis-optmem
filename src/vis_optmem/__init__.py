@@ -5,17 +5,30 @@ script. ``extension.py`` is the only file that registers it. Subclass
 ``MemoryStore`` to keep the memory in another place.
 """
 
-from vis_optmem.memo import EVERYONE, PERSONAL, Memo, MemoryNotSet, load_store, status
+from vis_optmem.memo import (
+    EVERYONE,
+    PERSONAL,
+    TOOLS,
+    Memo,
+    MemoryNotSet,
+    ToolDisabled,
+    disabled_tools,
+    load_store,
+    status,
+)
 from vis_optmem.store import Entry, FileStore, MemoryStore
 
 __all__ = [
     "EVERYONE",
     "PERSONAL",
+    "TOOLS",
     "Entry",
     "FileStore",
     "Memo",
     "MemoryNotSet",
     "MemoryStore",
+    "ToolDisabled",
+    "disabled_tools",
     "load_store",
     "status",
 ]
