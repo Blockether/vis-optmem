@@ -23,6 +23,7 @@ import os
 import re
 import time
 from abc import ABC, abstractmethod
+from collections import deque
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -321,6 +322,23 @@ class MemoryStore(ABC):
             if len(words & other) / len(words | other) >= DUPLICATE_SIMILARITY:
                 return entry
         return None
+
+    def matches(self, pattern: str, newest: int) -> tuple[int, list[Entry]]:
+        """Count the memories that match ``pattern``, and give the newest ``newest`` of them.
+
+        ``pattern`` is a Python regular expression, matched without case against
+        ``Entry.line``. Return the matches oldest first. ``memo.recall(pattern)`` uses
+        it. The default reads every memory once. Override it to search where the
+        memories are, for example in the memory of a service.
+        """
+        regex = re.compile(pattern, re.IGNORECASE)
+        total = 0
+        found: deque[Entry] = deque(maxlen=max(newest, 0))
+        for entry in self.scan():
+            if regex.search(entry.line):
+                total += 1
+                found.append(entry)
+        return total, list(found)
 
     # Summaries
 

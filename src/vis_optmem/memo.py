@@ -930,13 +930,14 @@ class Memo:
         found: list[tuple[str, int, int, str]] = []
         total = 0
         if regex is not None:
+            # A line has at least 16 bytes with its newline, like "#0 2026-01-01 x".
+            most = max(limit, 0) // 16 + 1
             for order, (name, store, _) in enumerate(opened):
+                count, entries = store.matches(regex.pattern, most)
+                total += count
                 newest: deque[tuple[str, int, int, str]] = deque()
                 used = 0
-                for entry in store.scan():
-                    if not regex.search(entry.line):
-                        continue
-                    total += 1
+                for entry in entries:
                     line = label(name, entry.line)
                     newest.append((entry.date, entry.id, order, line))
                     used += len(line.encode("utf-8")) + 1

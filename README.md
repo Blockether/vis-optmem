@@ -147,6 +147,7 @@ instead of a folder. Write a store for that place, then select it with two setti
    | `overrides()`, `write_overrides(overrides)`  | Read and write the sizes                        |
    | `search(query, limit)`, optional             | Find related memories for `memo.recall(about=)` |
    | `duplicate(text)`, optional                  | Find the memory that a new note repeats         |
+   | `matches(pattern, newest)`, optional         | Find memories for `memo.recall(pattern)`        |
 
    Make each write atomic, because many sessions write at the same time. The docstrings of
    `MemoryStore` give the exact contract.
@@ -172,6 +173,23 @@ environment:
 `Name` is a `MemoryStore` subclass or a function that returns a store. vis-optmem runs this
 code in your Vis session, so select only code that you trust. If the store cannot load or
 connect, the session shows the error in `session["memo"]`, and the memo tools explain it.
+
+### Keep the memory in a service
+
+`vis_optmem.remote.RemoteStore` keeps a memory in an HTTP service, for example an AWS Lambda
+function. Each store call is one JSON request, so the service does the search and the repeat
+check where the memories are. This team memory uses such a service:
+
+```yaml
+environment:
+  MEMORY_TEAM_STORE: {literal: "vis_optmem.remote:RemoteStore"}
+  MEMORY_TEAM_STORE_CONFIG: {literal: '{"url": "https://memory.example.com/", "memory": "team"}'}
+  MEMORY_STORE_TOKEN: {env: MEMORY_STORE_TOKEN}
+```
+
+To build the service, implement a `MemoryStore` in it and serve it with
+`vis_optmem.remote.lambda_response(event, stores, token)`. The module docstring of
+`vis_optmem.remote` gives the protocol. `tests/test_remote.py` runs every memo tool through it.
 
 The store runs in the Python environment of vis-optmem. That environment has the standard
 library and the packages that vis-optmem declares, not the shared Vis packages. So write the

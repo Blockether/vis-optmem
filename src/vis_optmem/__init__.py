@@ -18,6 +18,7 @@ from vis_optmem.memo import (
     load_store,
     status,
 )
+from vis_optmem.remote import RemoteStore
 from vis_optmem.store import Entry, FileStore, MemoryStore
 
 __all__ = [
@@ -31,6 +32,7 @@ __all__ = [
     "Memo",
     "MemoryNotSet",
     "MemoryStore",
+    "RemoteStore",
     "ToolDisabled",
     "disabled_tools",
     "load_store",

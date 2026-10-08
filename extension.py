@@ -222,6 +222,7 @@ vis.register_extension(
             "MEMORY_TEAM_STORE",
             "MEMORY_TEAM_STORE_CONFIG",
             "MEMORY_DISABLED_TOOLS",
+            "MEMORY_STORE_TOKEN",
         ],
     )
 )
