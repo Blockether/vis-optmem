@@ -10,7 +10,7 @@ import datetime
 import os
 import re
 from collections import deque
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated
@@ -243,14 +243,31 @@ class Memo:
 
     The memory folder is ``directory``, else ``$MEMORY_DIR``, else
     ``~/.optmem/memory``: the same folder that the ``memo`` tool uses.
+
+    ``base`` returns the folder for a relative path. Vis passes the session
+    workspace, so ``MEMORY_DIR=memory`` is ``<workspace>/memory``. An absolute or
+    ``~`` path does not use ``base``. Without ``base``, a relative path starts at
+    the working directory of the process, as in the ``memo`` tool.
     """
 
-    def __init__(self, directory: str | os.PathLike[str] | None = None) -> None:
+    def __init__(
+        self,
+        directory: str | os.PathLike[str] | None = None,
+        *,
+        base: Callable[[], str | os.PathLike[str]] | None = None,
+    ) -> None:
         self._directory = directory
+        self._base = base
 
     def _path(self) -> Path:
-        chosen = self._directory or os.environ.get("MEMORY_DIR") or DEFAULT_DIRECTORY
-        return Path(os.path.abspath(os.path.expanduser(os.fspath(chosen))))
+        chosen = os.path.expanduser(
+            os.fspath(
+                self._directory or os.environ.get("MEMORY_DIR") or DEFAULT_DIRECTORY
+            )
+        )
+        if not os.path.isabs(chosen) and self._base is not None:
+            chosen = os.path.join(os.fspath(self._base()), chosen)
+        return Path(os.path.abspath(chosen))
 
     def _open(self) -> tuple[Store, dict[str, int]]:
         store = Store(self._path())
@@ -629,12 +646,17 @@ class Memo:
         return Imported(text, first, final, due)
 
 
-def status(directory: str | os.PathLike[str] | None = None) -> dict[str, object]:
+def status(
+    directory: str | os.PathLike[str] | None = None,
+    *,
+    base: Callable[[], str | os.PathLike[str]] | None = None,
+) -> dict[str, object]:
     """Facts for the session context: memory count, summaries due and the memory size limit.
 
-    It reports a problem as a fact and never raises, so a bad folder cannot stop a session.
+    ``base`` resolves a relative folder, as in ``Memo``. It reports a problem as a
+    fact and never raises, so a bad folder cannot stop a session.
     """
-    store = Store(Memo(directory)._path())
+    store = Store(Memo(directory, base=base)._path())
     if not store.exists():
         return {"store": "missing", "path": pretty(store.directory)}
     try:

@@ -200,3 +200,33 @@ def test_prompt_and_context_follow_the_memory_folder(registered, folder, monkeyp
     assert registered.ctx({}) == {
         "memo": {"memories": 0, "summaries_due": 0, "max_bytes": 200}
     }
+
+
+class Workspace(Host):
+    """A host with a bound session in `project`."""
+
+    def __init__(self, project):
+        super().__init__("memory")
+        self.project = project
+
+    def workspace_root(self):
+        return str(self.project)
+
+
+def test_a_relative_memory_dir_is_in_the_session_workspace(monkeypatch, tmp_path):
+    # Blockether/vis-optmem#1: a relative MEMORY_DIR started at the gateway directory.
+    project = tmp_path / "project"
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(vis, "_host", Workspace(project))
+    monkeypatch.setattr(vis, "_registration", {"spec": None})
+    runpy.run_path(str(ROOT / "extension.py"))
+    spec = vis._registration["spec"]
+    tools = {item["name"]: item["fn"] for item in spec["symbols"][0]["methods"]}
+    assert tools["init"]().path == str(project / "memory")
+    tools["note"]("a fact")
+    assert spec["ctx"]({"cwd": str(project)}) == {
+        "memo": {"memories": 1, "summaries_due": 0, "max_bytes": 280}
+    }
+    assert "one line of at most 280 bytes" in spec["prompt"]({"cwd": str(project)})
+    assert spec["ctx"]({})["memo"]["store"] == "missing"
+    assert not (tmp_path / "memory").exists()

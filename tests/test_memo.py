@@ -31,6 +31,51 @@ def test_memory_dir_selects_the_folder(folder, monkeypatch):
     assert status() == {"memories": 0, "summaries_due": 0, "max_bytes": 280}
 
 
+def refuse_base():
+    raise AssertionError("A path that is not relative must not read the base.")
+
+
+def test_a_relative_memory_dir_starts_at_the_base(tmp_path, monkeypatch):
+    # Blockether/vis-optmem#1: a relative MEMORY_DIR started at the gateway directory.
+    project = tmp_path / "project"
+    monkeypatch.setenv("MEMORY_DIR", "memory")
+    assert Memo(base=lambda: project).init().path == str(project / "memory")
+    assert status(base=lambda: str(project)) == {
+        "memories": 0,
+        "summaries_due": 0,
+        "max_bytes": 280,
+    }
+    assert Memo("other", base=lambda: project)._path() == project / "other"
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("{tmp}/absolute", "absolute"),
+        ("~/memory", "home/memory"),
+        (None, "home/.optmem/memory"),
+    ],
+)
+def test_absolute_home_and_default_folders_ignore_the_base(
+    tmp_path, monkeypatch, value, expected
+):
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    if value is None:
+        monkeypatch.delenv("MEMORY_DIR", raising=False)
+    else:
+        monkeypatch.setenv("MEMORY_DIR", value.format(tmp=tmp_path))
+    assert Memo(base=refuse_base)._path() == tmp_path / expected
+    assert status(base=refuse_base)["path"].endswith(expected.split("/")[-1])
+
+
+def test_without_a_base_a_relative_memory_dir_starts_at_the_process_directory(
+    tmp_path, monkeypatch
+):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("MEMORY_DIR", "memory")
+    assert Memo()._path() == tmp_path / "memory"
+
+
 def test_an_empty_memory_is_awake_at_once(memo):
     woken = memo.wake()
     assert (woken.lines, woken.is_awake, woken.at) == ((), True, 0)

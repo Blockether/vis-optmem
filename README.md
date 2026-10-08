@@ -49,6 +49,16 @@ A subagent does not use the memory. Its leader reads and writes it.
 The memory folder is `$MEMORY_DIR`, else `~/.optmem/memory`. To use another folder, set
 `MEMORY_DIR` before you start Vis.
 
+A relative `MEMORY_DIR` is a folder in the session workspace. To keep the memory in the
+project, put it in the shared project `vis.yml`:
+
+```yaml
+environment:
+  MEMORY_DIR: {literal: "memory"}
+```
+
+Each person then gets `<workspace>/memory`. An absolute path or a `~` path does not change.
+
 The files are the same as those of the OptMem `memo` command, so both tools can use one memory.
 A lock file keeps the writes of all sessions and processes in order. Do not edit the files by hand.
 

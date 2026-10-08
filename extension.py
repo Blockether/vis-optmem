@@ -150,13 +150,19 @@ for name, label, tag, build in BINDINGS:
     )
 
 
+def _workspace(env):
+    """The session workspace from a callback `env`, or None outside a session."""
+    cwd = env.get("cwd")
+    return (lambda: cwd) if cwd else None
+
+
 def _prompt(env):
-    limit = status().get("max_bytes", DEFAULT_LIMIT)
+    limit = status(base=_workspace(env)).get("max_bytes", DEFAULT_LIMIT)
     return PROMPT.format(limit=limit)
 
 
 def _ctx(env):
-    return {"memo": status()}
+    return {"memo": status(base=_workspace(env))}
 
 
 vis.register_extension(
@@ -166,9 +172,9 @@ vis.register_extension(
             "Permanent memory for agents, shared by every session on this machine. "
             "Based on OptMem by Victor Taelin."
         ),
-        version="0.1.0",
+        version="0.1.1",
         alias="memo",
-        symbols=[vis.Symbol(Memo(), name="memo")],
+        symbols=[vis.Symbol(Memo(base=vis.workspace_root), name="memo")],
         prompt=_prompt,
         ctx=_ctx,
         env=["MEMORY_DIR"],

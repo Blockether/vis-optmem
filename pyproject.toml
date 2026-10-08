@@ -1,6 +1,6 @@
 [project]
 name = "vis-optmem"
-version = "0.1.0"
+version = "0.1.1"
 description = "Permanent memory for Vis agents, based on OptMem by Victor Taelin."
 keywords = ["memory", "agents"]
 requires-python = ">=3.11"
