@@ -34,9 +34,9 @@ memo.config({"WAKE_LINES": 128})     # show or change the sizes
 memo.import_memories("~/old.txt")    # add dated lines, each "YYYY-MM-DD text"
 ```
 
-Each tool takes `scope="personal"`, the default, or `scope="everyone"`. `memo.recall()` also
+Each tool takes `scope="personal"`, the default, or `scope="team"`. `memo.recall()` also
 takes `scope="all"`, which searches both memories. See
-[Personal and shared memory](#personal-and-shared-memory).
+[Personal and team memory](#personal-and-team-memory).
 
 Each result is a typed record with a `text` field. The agent prints the text and does what it says.
 A subagent does not use the memory. Its leader reads and writes it.
@@ -84,39 +84,43 @@ Each person then gets `<workspace>/memory`. An absolute path or a `~` path does 
 The files are the same as those of the OptMem `memo` command, so both tools can use one memory.
 A lock file keeps the writes of all sessions and processes in order. Do not edit the files by hand.
 
-## Personal and shared memory
+## Personal and team memory
 
 vis-optmem has two memories:
 
 - **personal**: your own memory. The tools use it when you give no `scope`.
-- **everyone**: one memory that every person on your team shares. It keeps general knowledge that
+- **team**: one memory that every person on your team shares. It keeps general knowledge that
   stays useful in other projects: best practices, reusable solutions, pitfalls with their fixes and
   team conventions.
 
 The two memories never mix. Each has its own memories and its own summaries, so a summary of the
-shared memory never contains a personal note. The agent saves to the shared memory only facts
-that every person may read, and keeps project details and facts about you personal. It writes
-each shared memory so that it stands alone and a search finds it. Before it plans a task, it
-searches both memories with `memo.recall()`.
+team memory never contains a personal note. The agent saves to the team memory only facts that
+every person may read, and keeps project details and facts about you personal. It writes each
+team memory so that it stands alone and a search finds it.
 
-The shared memory has no default place. To enable it, set one of these before you start Vis:
+The agent reads only the personal memory at the start of a session. It does not read the team
+memory: before it plans a task, it searches both memories with `memo.recall(scope="all")`. So a
+large team memory costs no tokens at the start. For the same reason, a team note does not ask
+the agent for a summary. Summaries matter only for `memo.wake()` and `memo.zoom()`. If you want
+them for the team memory, let a scheduled job write them with `memo.nap(scope="team")`.
 
-- `MEMORY_EVERYONE_DIR`: a folder that every person reaches. A relative path is in the session
+The team memory has no default place. To enable it, set one of these before you start Vis:
+
+- `MEMORY_TEAM_DIR`: a folder that every person reaches. A relative path is in the session
   workspace. It must not be the personal memory folder.
-- `MEMORY_EVERYONE_STORE` and `MEMORY_EVERYONE_STORE_CONFIG`: a custom store, as in
+- `MEMORY_TEAM_STORE` and `MEMORY_TEAM_STORE_CONFIG`: a custom store, as in
   [Keep the memory in another place](#keep-the-memory-in-another-place).
 
 Then create it once:
 
 ```python
-memo.init(scope="everyone")
-memo.note("The team uses uv, not Poetry.", scope="everyone")
+memo.init(scope="team")
+memo.note("The team uses uv, not Poetry.", scope="team")
 ```
 
-When you read your personal memory, the result gives the call that reads the shared memory. In a
-session, `session["memo"]["everyone"]` shows the count of shared memories, or
-`{"store": "unset"}` when no shared memory is set. In Python, use
-`Memo(everyone_directory=...)` or `Memo(everyone_store=...)`.
+In a session, `session["memo"]["team"]` shows the count of team memories, or
+`{"store": "unset"}` when no team memory is set. In Python, use
+`Memo(team_directory=...)` or `Memo(team_store=...)`.
 
 ## Keep the memory in another place
 
@@ -181,9 +185,9 @@ In Python, give the store directly: `Memo(store=MyStore(...))`.
 memo.recall(r"postgres|migration", about="change a database schema safely", scope="all")
 ```
 
-With `scope="all"`, each line starts with its memory, for example `[everyone] #3 2025-01-07 ...`,
+With `scope="all"`, each line starts with its memory, for example `[team] #3 2025-01-07 ...`,
 because both memories number their memories from 0. The related memories take the best of each
-memory in turn. If no memory for everyone is set, the search uses only the personal memory and
+memory in turn. If no team memory is set, the search uses only the personal memory and
 says so.
 
 The store decides what "related" means. The default `search` ranks memories by the words that

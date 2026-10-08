@@ -7,8 +7,8 @@ script. ``extension.py`` is the only file that registers it. Subclass
 
 from vis_optmem.memo import (
     ALL,
-    EVERYONE,
     PERSONAL,
+    TEAM,
     TOOLS,
     Memo,
     MemoryNotSet,
@@ -21,8 +21,8 @@ from vis_optmem.store import Entry, FileStore, MemoryStore
 
 __all__ = [
     "ALL",
-    "EVERYONE",
     "PERSONAL",
+    "TEAM",
     "TOOLS",
     "Entry",
     "FileStore",

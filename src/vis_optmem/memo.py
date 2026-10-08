@@ -47,20 +47,24 @@ Larger blocks are summarized from the summaries of their two halves.
 PERSONAL = "personal"
 """The memory of one person: ``MEMORY_DIR`` or ``MEMORY_STORE``. Tools use it by default."""
 
-EVERYONE = "everyone"
-"""The memory that every person shares: ``MEMORY_EVERYONE_DIR`` or ``MEMORY_EVERYONE_STORE``."""
+TEAM = "team"
+"""The memory that the whole team shares: ``MEMORY_TEAM_DIR`` or ``MEMORY_TEAM_STORE``.
+
+Agents search it with ``memo.recall`` and do not read it at the start of a session, so
+its notes ask for no summaries. A scheduled job can write them with ``memo.nap``.
+"""
 
 ALL = "all"
 """Both memories at once. Only ``memo.recall`` takes it: a write goes to one memory."""
 
-SCOPES = (PERSONAL, EVERYONE)
+SCOPES = (PERSONAL, TEAM)
 
 VARIABLES = {
     PERSONAL: ("MEMORY_DIR", "MEMORY_STORE", "MEMORY_STORE_CONFIG"),
-    EVERYONE: (
-        "MEMORY_EVERYONE_DIR",
-        "MEMORY_EVERYONE_STORE",
-        "MEMORY_EVERYONE_STORE_CONFIG",
+    TEAM: (
+        "MEMORY_TEAM_DIR",
+        "MEMORY_TEAM_STORE",
+        "MEMORY_TEAM_STORE_CONFIG",
     ),
 }
 """The environment variables that choose each memory: folder, custom store, store config."""
@@ -98,13 +102,13 @@ def _block_name(lo: int, hi: int) -> str:
 
 
 MemoryScope = Annotated[
-    Literal["personal", "everyone"],
-    'Which memory: "personal" (yours, the default) or "everyone" (shared by every person).',
+    Literal["personal", "team"],
+    'Which memory: "personal" (yours, the default) or "team" (shared by every person).',
 ]
 
 SearchScope = Annotated[
-    Literal["personal", "everyone", "all"],
-    'Which memory to search: "personal" (the default), "everyone", or "all" for both at once.',
+    Literal["personal", "team", "all"],
+    'Which memory to search: "personal" (the default), "team", or "all" for both at once.',
 ]
 
 Block = Annotated[
@@ -118,11 +122,11 @@ def check_scope(scope: str) -> str:
     if scope == ALL:
         raise ValueError(
             f"scope={ALL!r} works only with {NAMESPACE}.recall. "
-            f"Use {PERSONAL!r} or {EVERYONE!r}."
+            f"Use {PERSONAL!r} or {TEAM!r}."
         )
     if scope not in SCOPES:
         raise ValueError(
-            f"scope={scope!r} is not a memory. Use {PERSONAL!r} or {EVERYONE!r}."
+            f"scope={scope!r} is not a memory. Use {PERSONAL!r} or {TEAM!r}."
         )
     return scope
 
@@ -135,7 +139,7 @@ def _call(method: str, *args: str, scope: str = PERSONAL) -> str:
 
 
 class MemoryNotSet(LookupError):
-    """No folder and no store is set for the memory of everyone."""
+    """No folder and no store is set for the team memory."""
 
 
 class ToolDisabled(PermissionError):
@@ -255,7 +259,7 @@ class Wake:
         SummaryRequest | None,
         "A summary that is due. When lines is empty, wake needs it first.",
     ]
-    scope: Annotated[str, "The memory: personal or everyone."] = PERSONAL
+    scope: Annotated[str, "The memory: personal or team."] = PERSONAL
 
 
 @dataclass(frozen=True, slots=True)
@@ -267,7 +271,7 @@ class Saved:
     date: Annotated[str, "Date of the new memory, as YYYY-MM-DD."]
     memory: Annotated[str, "The saved memory, without outer whitespace."]
     request: Annotated[SummaryRequest | None, "A summary that is due now."]
-    scope: Annotated[str, "The memory: personal or everyone."] = PERSONAL
+    scope: Annotated[str, "The memory: personal or team."] = PERSONAL
 
 
 @dataclass(frozen=True, slots=True)
@@ -278,14 +282,14 @@ class Nap:
     saved: Annotated[str | None, "Block whose summary this call saved, or None."]
     summary: Annotated[str | None, "The saved summary, or None."]
     request: Annotated[SummaryRequest | None, "The next summary that is due, or None."]
-    scope: Annotated[str, "The memory: personal or everyone."] = PERSONAL
+    scope: Annotated[str, "The memory: personal or team."] = PERSONAL
 
 
 @dataclass(frozen=True, slots=True)
 class Recall:
     """Memories that match a pattern, and memories related to a query.
 
-    With ``scope="all"``, each line starts with its memory, like ``[everyone] #3 ...``,
+    With ``scope="all"``, each line starts with its memory, like ``[team] #3 ...``,
     because both memories number their memories from 0.
     """
 
@@ -298,7 +302,7 @@ class Recall:
         "The newest matching memories that fit one print, oldest first.",
     ]
     total: Annotated[int, "Number of all matching memories."]
-    scope: Annotated[str, "The memory: personal, everyone or all."] = PERSONAL
+    scope: Annotated[str, "The memory: personal, team or all."] = PERSONAL
     about: Annotated[str | None, "The query for related memories, or None."] = None
     related: Annotated[tuple[str, ...], "Memories related to about, best first."] = ()
 
@@ -313,7 +317,7 @@ class Zoom:
         tuple[str, ...],
         "A summary, or a memory when a half holds one. A half after the newest memory is absent.",
     ]
-    scope: Annotated[str, "The memory: personal or everyone."] = PERSONAL
+    scope: Annotated[str, "The memory: personal or team."] = PERSONAL
 
 
 @dataclass(frozen=True, slots=True)
@@ -322,7 +326,7 @@ class Forgot:
 
     text: Annotated[str, "What to read: the result and the next step."]
     blocks: Annotated[tuple[str, ...], "Dropped blocks, smallest first."]
-    scope: Annotated[str, "The memory: personal or everyone."] = PERSONAL
+    scope: Annotated[str, "The memory: personal or team."] = PERSONAL
 
 
 @dataclass(frozen=True, slots=True)
@@ -342,7 +346,7 @@ class Sizes:
     text: Annotated[str, "What to read: one size on each line."]
     sizes: Annotated[tuple[SizeValue, ...], "Every size."]
     changed: Annotated[tuple[str, ...], "Names that this call changed."]
-    scope: Annotated[str, "The memory: personal or everyone."] = PERSONAL
+    scope: Annotated[str, "The memory: personal or team."] = PERSONAL
 
 
 @dataclass(frozen=True, slots=True)
@@ -355,7 +359,7 @@ class StoreInfo:
     ]
     memories: Annotated[int, "Number of memories."]
     is_new: Annotated[bool, "True when this call created the memory."]
-    scope: Annotated[str, "The memory: personal or everyone."] = PERSONAL
+    scope: Annotated[str, "The memory: personal or team."] = PERSONAL
 
 
 @dataclass(frozen=True, slots=True)
@@ -366,7 +370,7 @@ class Imported:
     first: Annotated[int, "Id of the first imported memory."]
     last: Annotated[int, "Id of the last imported memory."]
     due: Annotated[int, "Number of summaries that are due."]
-    scope: Annotated[str, "The memory: personal or everyone."] = PERSONAL
+    scope: Annotated[str, "The memory: personal or team."] = PERSONAL
 
 
 Base = Callable[[], str | os.PathLike[str]]
@@ -451,12 +455,12 @@ def _store_config(variable: str = "MEMORY_STORE_CONFIG") -> dict[str, object]:
 
 
 class Memo:
-    """Permanent memory in the OptMem format, in two memories: personal and everyone.
+    """Permanent memory in the OptMem format, in two memories: personal and team.
 
     Each tool takes ``scope``. ``"personal"``, the default, is the memory of one
-    person. ``"everyone"`` is a second memory that every person who reaches its
+    person. ``"team"`` is a second memory that every person who reaches its
     folder or store shares. The two memories never mix: each has its own memories
-    and summaries.
+    and summaries. Agents read the personal memory and search the team memory.
 
     The personal memory is ``store`` when you give one: a ``MemoryStore``, or a
     function that returns one for each call. Else ``$MEMORY_STORE`` selects a custom
@@ -465,9 +469,9 @@ class Memo:
     ``$MEMORY_DIR``, else ``~/.optmem/memory``: the same folder that the ``memo``
     tool uses.
 
-    The memory of everyone has no default place. ``everyone_store``,
-    ``$MEMORY_EVERYONE_STORE`` with ``$MEMORY_EVERYONE_STORE_CONFIG``,
-    ``everyone_directory`` and ``$MEMORY_EVERYONE_DIR`` choose it in the same order.
+    The team memory has no default place. ``team_store``,
+    ``$MEMORY_TEAM_STORE`` with ``$MEMORY_TEAM_STORE_CONFIG``,
+    ``team_directory`` and ``$MEMORY_TEAM_DIR`` choose it in the same order.
 
     ``base`` returns the folder for a relative path. Vis passes the session
     workspace, so ``MEMORY_DIR=memory`` is ``<workspace>/memory``. An absolute or
@@ -481,13 +485,13 @@ class Memo:
         *,
         base: Base | None = None,
         store: MemoryStore | Callable[[], MemoryStore] | None = None,
-        everyone_directory: str | os.PathLike[str] | None = None,
-        everyone_store: MemoryStore | Callable[[], MemoryStore] | None = None,
+        team_directory: str | os.PathLike[str] | None = None,
+        team_store: MemoryStore | Callable[[], MemoryStore] | None = None,
         disabled: str | Iterable[str] | None = None,
     ) -> None:
-        self._directory = {PERSONAL: directory, EVERYONE: everyone_directory}
+        self._directory = {PERSONAL: directory, TEAM: team_directory}
         self._base = base
-        self._custom = {PERSONAL: store, EVERYONE: everyone_store}
+        self._custom = {PERSONAL: store, TEAM: team_store}
         self._disabled = None if disabled is None else disabled_tools(disabled)
 
     def _allow(self, tool: str) -> None:
@@ -516,8 +520,8 @@ class Memo:
             return ""
         return os.environ.get(VARIABLES[scope][1], "").strip()
 
-    def _is_set(self, scope: str = EVERYONE) -> bool:
-        """True when the memory has a place: always for personal, by setting for everyone."""
+    def _is_set(self, scope: str = TEAM) -> bool:
+        """True when the memory has a place: always for personal, by setting for team."""
         check_scope(scope)
         return bool(
             self._custom[scope] is not None
@@ -541,19 +545,19 @@ class Memo:
         path = self._path(scope)
         if path is None:
             raise MemoryNotSet(
-                "No memory for everyone is set, so use the personal memory. To set one, "
-                "set MEMORY_EVERYONE_DIR to a folder that every person reaches, or "
-                "MEMORY_EVERYONE_STORE to a shared store."
+                "No team memory is set, so use the personal memory. To set one, "
+                "set MEMORY_TEAM_DIR to a folder that every person reaches, or "
+                "MEMORY_TEAM_STORE to a shared store."
             )
         if (
-            scope == EVERYONE
+            scope == TEAM
             and self._custom[PERSONAL] is None
             and not self._reference(PERSONAL)
             and path == self._path(PERSONAL)
         ):
             raise ValueError(
                 f"{folder} is the personal memory folder {pretty(path)}. "
-                "Give the memory for everyone its own folder."
+                "Give the team memory its own folder."
             )
         return FileStore(path)
 
@@ -614,20 +618,11 @@ class Memo:
         lines.append(f"Next: await {save}")
         return SummaryRequest(block, sources, limit, remaining, "\n".join(lines))
 
-    def _awake(self, scope: str) -> str:
-        """The last line of a complete read: the memory for everyone comes next when set."""
-        if scope == PERSONAL and self._is_set(EVERYONE):
-            return (
-                "Personal memory read. Read the memory for everyone too. "
-                f"Next: await {_call('wake', scope=EVERYONE)}"
-            )
-        return "You are awake."
-
     def init(self, scope: MemoryScope = PERSONAL) -> StoreInfo:
         """Create a memory when it does not exist. Calling it again changes nothing.
 
         Call it once for each memory, before its first note. wake and note never
-        create a memory, so a wrong MEMORY_DIR or MEMORY_EVERYONE_DIR stops them
+        create a memory, so a wrong MEMORY_DIR or MEMORY_TEAM_DIR stops them
         instead of starting an empty memory.
         """
         self._allow("init")
@@ -640,7 +635,7 @@ class Memo:
             text = f"Created {place}: " + (
                 "one memory for every session on this machine."
                 if scope == PERSONAL
-                else "one memory for everyone who reaches it."
+                else "one team memory who reaches it."
             )
         else:
             text = f"Found {place}: {_plural(count, 'memory', 'memories')}."
@@ -661,9 +656,8 @@ class Memo:
     ) -> Wake:
         """Read a memory: recent memories in full, older periods as summaries.
 
-        Read the personal memory at the start of each session. When a memory for
-        everyone is set, the last line gives the call that reads it. A large
-        memory comes in parts that each fit one print, and each part gives the
+        Read the personal memory at the start of each session. Search the team
+        memory with memo.recall() instead of reading it. A large memory comes in parts that each fit one print, and each part gives the
         call for the next one. When the read needs a summary that is not written
         yet, the result has no lines and asks for that summary first.
         """
@@ -682,7 +676,7 @@ class Memo:
             )
         if total == 0:
             first = _call("note", '"<one line>"', scope=scope)
-            text = f"No memories yet. Save the first one with {first}.\n{self._awake(scope)}"
+            text = f"No memories yet. Save the first one with {first}.\nYou are awake."
             return Wake(text, (), 1, 1, 0, True, None, scope)
         lines = []
         for lo, hi in cover(total, sizes["WAKE_LINES"]):
@@ -724,7 +718,7 @@ class Memo:
         is_awake = part == len(parts)
         request = None
         if is_awake:
-            out.append(self._awake(scope))
+            out.append("You are awake.")
             request = self._request(store, sizes, total, scope)
             if request is not None:
                 out += ["", request.text]
@@ -756,7 +750,7 @@ class Memo:
         """Save one fact as a new memory, with the date of today.
 
         A saved memory never changes and nothing removes it, so save only facts of
-        lasting value. Save to ``scope="everyone"`` only general knowledge that
+        lasting value. Save to ``scope="team"`` only general knowledge that
         every person may read. The result can ask for a summary: save it with
         memo.nap() before your next action.
         """
@@ -765,9 +759,14 @@ class Memo:
         line = check_line(memory, sizes["ENTRY_CHARS"], what="memory")
         date = datetime.date.today().isoformat()
         number = store.append([(date, line)])
-        request = self._request(store, sizes, number + 1, scope)
+        # The team memory is searched, not read, so its notes ask for no summary.
+        request = (
+            self._request(store, sizes, number + 1, scope)
+            if scope == PERSONAL
+            else None
+        )
         text = f"Saved as #{number}" + (
-            "." if scope == PERSONAL else " in the memory for everyone."
+            "." if scope == PERSONAL else " in the team memory."
         )
         if request is not None:
             text += "\n\n" + request.text
@@ -858,8 +857,8 @@ class Memo:
         other words. The store decides how. The default store ranks memories by
         the words that they share with ``about``.
 
-        ``scope="all"`` searches the personal memory and the memory for everyone
-        in one call. Each line then starts with its memory, like ``[everyone]``.
+        ``scope="all"`` searches the personal memory and the team memory
+        in one call. Each line then starts with its memory, like ``[team]``.
         """
         self._allow("recall")
         if pattern is None and about is None:
@@ -879,13 +878,13 @@ class Memo:
         if about is not None and not about.strip():
             raise ValueError("about is empty. Write what the memories are about.")
         if scope == ALL:
-            scopes = [PERSONAL, *([EVERYONE] if self._is_set(EVERYONE) else [])]
+            scopes = [PERSONAL, *([TEAM] if self._is_set(TEAM) else [])]
         elif scope in SCOPES:
             scopes = [scope]
         else:
             raise ValueError(
                 f"scope={scope!r} is not a memory. "
-                f"Use {PERSONAL!r}, {EVERYONE!r} or {ALL!r}."
+                f"Use {PERSONAL!r}, {TEAM!r} or {ALL!r}."
             )
         opened = [(name, *self._open(name)) for name in scopes]
         limit = min(VIS_PART_BYTES, *(sizes["PART_CHARS"] for _, _, sizes in opened))
@@ -931,7 +930,7 @@ class Memo:
         kept = [item[3] for item in found]
         out: list[str] = []
         if scope == ALL and len(opened) == 1:
-            out += ["Only the personal memory: no memory for everyone is set.", ""]
+            out += ["Only the personal memory: no team memory is set.", ""]
         if regex is not None:
             if not total:
                 out.append("No match.")
@@ -1118,7 +1117,7 @@ class Memo:
         final = first + len(items) - 1
         due = store.due_count(store.count())
         text = f"Imported {_plural(len(items), 'memory', 'memories')}, #{first} to #{final}."
-        if due:
+        if due and scope == PERSONAL:
             again = "it" if due == 1 else "them"
             text += (
                 f"\n{_plural(due, 'summary is', 'summaries are')} due. "
@@ -1137,7 +1136,7 @@ def status(
     """Facts for the session context: memory count, summaries due and the memory size limit.
 
     ``directory``, ``base`` and ``store`` choose the memory of ``scope``, as in ``Memo``.
-    A memory for everyone without a place is ``{"store": "unset"}``. It reports a
+    A team memory without a place is ``{"store": "unset"}``. It reports a
     problem as a fact and never raises, so a bad folder or an unreachable store cannot
     stop a session.
     """
@@ -1146,7 +1145,7 @@ def status(
         if scope == PERSONAL:
             memo = Memo(directory, base=base, store=store)
         else:
-            memo = Memo(base=base, everyone_directory=directory, everyone_store=store)
+            memo = Memo(base=base, team_directory=directory, team_store=store)
         chosen = memo._store(scope)
     except MemoryNotSet:
         return {"store": "unset"}

@@ -9,7 +9,7 @@ import blockether.vis.extension as vis
 import pytest
 from conftest import fill
 
-from vis_optmem.memo import EVERYONE, Memo, Recall, Saved, Wake
+from vis_optmem.memo import TEAM, Memo, Recall, Saved, Wake
 
 ROOT = Path(__file__).resolve().parents[1]
 TAGS = {
@@ -27,9 +27,9 @@ ENV = (
     "MEMORY_DIR",
     "MEMORY_STORE",
     "MEMORY_STORE_CONFIG",
-    "MEMORY_EVERYONE_DIR",
-    "MEMORY_EVERYONE_STORE",
-    "MEMORY_EVERYONE_STORE_CONFIG",
+    "MEMORY_TEAM_DIR",
+    "MEMORY_TEAM_STORE",
+    "MEMORY_TEAM_STORE_CONFIG",
     "MEMORY_DISABLED_TOOLS",
 )
 
@@ -207,7 +207,7 @@ def test_long_content_is_clipped_only_in_the_activity():
 def test_prompt_and_context_follow_the_memory_folder(registered, folder, monkeypatch):
     monkeypatch.setenv("MEMORY_DIR", str(folder))
     assert registered.ctx({})["memo"]["personal"]["store"] == "missing"
-    assert registered.ctx({})["memo"]["everyone"] == {"store": "unset"}
+    assert registered.ctx({})["memo"]["team"] == {"store": "unset"}
     assert "one line of at most 280 bytes" in registered.prompt({})
     Memo().init()
     Memo().config({"ENTRY_CHARS": 200})
@@ -215,7 +215,7 @@ def test_prompt_and_context_follow_the_memory_folder(registered, folder, monkeyp
     assert registered.ctx({}) == {
         "memo": {
             "personal": {"memories": 0, "summaries_due": 0, "max_bytes": 200},
-            "everyone": {"store": "unset"},
+            "team": {"store": "unset"},
         }
     }
 
@@ -252,22 +252,22 @@ def test_a_relative_memory_dir_is_in_the_session_workspace(monkeypatch, tmp_path
     assert not (tmp_path / "memory").exists()
 
 
-def test_the_context_and_the_activity_show_the_memory_for_everyone(
+def test_the_context_and_the_activity_show_the_memory_for_team(
     registered, folder, tmp_path, monkeypatch
 ):
     monkeypatch.setenv("MEMORY_DIR", str(folder))
-    monkeypatch.setenv("MEMORY_EVERYONE_DIR", "team")
+    monkeypatch.setenv("MEMORY_TEAM_DIR", "team")
     project = tmp_path / "project"
     tool = Memo(base=lambda: project)
-    tool.init(scope=EVERYONE)
-    saved = tool.note("team fact", scope=EVERYONE)
-    assert shown("note", saved) == ("Saved as #0 · everyone", ["team fact"])
+    tool.init(scope=TEAM)
+    saved = tool.note("team fact", scope=TEAM)
+    assert shown("note", saved) == ("Saved as #0 · team", ["team fact"])
     personal = Saved("Saved as #0.", 0, "2024-01-01", "my fact", None)
     assert shown("note", personal) == ("Saved as #0", ["my fact"])
     context = registered.ctx({"cwd": str(project)})["memo"]
-    assert context["everyone"] == {"memories": 1, "summaries_due": 0, "max_bytes": 280}
+    assert context["team"] == {"memories": 1, "summaries_due": 0, "max_bytes": 280}
     assert context["personal"]["store"] == "missing"
-    assert 'scope="everyone"' in registered.prompt({"cwd": str(project)})
+    assert 'scope="team"' in registered.prompt({"cwd": str(project)})
     prompt = registered.prompt({"cwd": str(project)})
     assert "general knowledge that stays useful in other projects" in prompt
     assert (
@@ -299,7 +299,7 @@ def test_every_parameter_is_described_and_scope_lists_its_values(registered):
             described = parameter["type"].get("description", "")
             assert described.endswith("."), (member["name"], parameter["name"])
             if parameter["name"] == "scope":
-                values = ["personal", "everyone"]
+                values = ["personal", "team"]
                 if member["name"] == "memo.recall":
                     values.append("all")
                 assert parameter["type"]["values"] == values, member["name"]

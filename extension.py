@@ -2,7 +2,7 @@
 
 import blockether.vis.extension as vis
 
-from vis_optmem.memo import EVERYONE, NAMESPACE, Memo, disabled_tools, status
+from vis_optmem.memo import NAMESPACE, TEAM, Memo, disabled_tools, status
 from vis_optmem.store import SIZES
 
 CONTENT_LIMIT = 4000
@@ -10,8 +10,8 @@ DEFAULT_LIMIT = next(size.default for size in SIZES if size.name == "ENTRY_CHARS
 
 PROMPT = """memo surface active: permanent memory that lasts across sessions, in two memories.
 - "personal", the default: your own memory. Facts about the user, preferences and project details.
-- "everyone": one memory that every person shares. General knowledge that stays useful in other projects: best practices, reusable solutions, pitfalls with their fixes, team conventions.
-Each tool takes scope="personal" (the default) or scope="everyone". memo.recall also takes scope="all": it searches both memories, and each line starts with its memory, like [everyone].
+- "team": one memory that the whole team shares, for search only. General knowledge that stays useful in other projects: best practices, reusable solutions, pitfalls with their fixes, team conventions.
+Each tool takes scope="personal" (the default) or scope="team". memo.recall also takes scope="all": it searches both memories, and each line starts with its memory, like [team].
   memo.wake(part=1, at=None)              read a memory
   memo.note(memory)                       save one fact: one line of at most {limit} bytes
   memo.nap(block, summary)                save a summary that a result asks for
@@ -19,14 +19,14 @@ Each tool takes scope="personal" (the default) or scope="everyone". memo.recall 
   memo.zoom(block)                        open a summary into its two halves
   memo.forget(block)                      drop a wrong summary; memo asks for it again
 Each result has a `text` field. Print it and do what it says. apropos(r"^memo\\.") lists the other tools.
-- At the start of each session, before other work, read your memory: print((await memo.wake()).text). Run each "Next:" call that a result gives until a result says "You are awake." This also reads the memory for everyone when it is set.
+- At the start of each session, before other work, read your memory: print((await memo.wake()).text). Run each "Next:" call that a result gives until a result says "You are awake." Do not read the team memory with memo.wake: search it.
 - Before you plan a task or choose a tool, search both memories in one call, for example memo.recall(r"postgres|migration", about="change a database schema safely", scope="all").
 - Save each new fact of lasting value when you learn it: decisions, results of real work, what the user teaches you, facts about the user's life, events with lasting effect.
-- Save to scope="everyone" only general knowledge that stays useful in other projects and that every person may read. Write it so that it stands alone and a search finds it: name the technology, the problem and the solution in plain words, without local paths or session details.
+- Save to scope="team" only general knowledge that stays useful in other projects and that every person may read. Write it so that it stands alone and a search finds it: name the technology, the problem and the solution in plain words, without local paths or session details.
 - Save each fact once, in one memory. When you are not sure that a fact is new, search first.
 - Never save passwords, keys or other secrets in either memory.
-- When a result asks for a summary, save it with the call in that result, before your next action. session["memo"]["personal"]["summaries_due"] and session["memo"]["everyone"]["summaries_due"] count the summaries that are due.
-- If session["memo"]["everyone"]["store"] is "unset", there is no memory for everyone: use only the personal memory.
+- When a result asks for a summary, save it with the call in that result, before your next action. session["memo"]["personal"]["summaries_due"] counts the summaries that are due.
+- If session["memo"]["team"]["store"] is "unset", there is no team memory: use only the personal memory.
 - If session["agent"]["role"] is "subagent", do not use memo.
 - Do not change the memory files yourself. memo owns them."""
 
@@ -52,8 +52,8 @@ def _render(label, build):
             )
         if phase == "success" and result is not None:
             summary, body = build(result)
-            if getattr(result, "scope", None) == EVERYONE:
-                summary += " · everyone"
+            if getattr(result, "scope", None) == TEAM:
+                summary += " · team"
             content = (vis.ActivityText(_clip(body)),) if body else ()
             return vis.ActivityPresentation(label, summary, content)
         return None
@@ -197,7 +197,7 @@ def _ctx(env):
     return {
         "memo": {
             "personal": status(base=base),
-            "everyone": status(base=base, scope=EVERYONE),
+            "team": status(base=base, scope=TEAM),
         }
     }
 
@@ -207,7 +207,7 @@ vis.register_extension(
         name="vis-optmem",
         description=(
             "Permanent memory for agents: a personal memory for every session on this "
-            "machine, and a memory that everyone shares. Based on OptMem by Victor Taelin."
+            "machine, and a team memory that agents search. Based on OptMem by Victor Taelin."
         ),
         version="0.2.0",
         alias="memo",
@@ -218,9 +218,9 @@ vis.register_extension(
             "MEMORY_DIR",
             "MEMORY_STORE",
             "MEMORY_STORE_CONFIG",
-            "MEMORY_EVERYONE_DIR",
-            "MEMORY_EVERYONE_STORE",
-            "MEMORY_EVERYONE_STORE_CONFIG",
+            "MEMORY_TEAM_DIR",
+            "MEMORY_TEAM_STORE",
+            "MEMORY_TEAM_STORE_CONFIG",
             "MEMORY_DISABLED_TOOLS",
         ],
     )
