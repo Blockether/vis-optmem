@@ -86,12 +86,15 @@ A lock file keeps the writes of all sessions and processes in order. Do not edit
 vis-optmem has two memories:
 
 - **personal**: your own memory. The tools use it when you give no `scope`.
-- **everyone**: one memory that every person on your team shares, for example team decisions and
-  project conventions.
+- **everyone**: one memory that every person on your team shares. It keeps general knowledge that
+  stays useful in other projects: best practices, reusable solutions, pitfalls with their fixes and
+  team conventions.
 
 The two memories never mix. Each has its own memories and its own summaries, so a summary of the
 shared memory never contains a personal note. The agent saves to the shared memory only facts
-that every person may read, and keeps facts about you personal.
+that every person may read, and keeps project details and facts about you personal. It writes
+each shared memory so that it stands alone and a search finds it. Before it plans a task, it
+searches both memories with `memo.recall()`.
 
 The shared memory has no default place. To enable it, set one of these before you start Vis:
 

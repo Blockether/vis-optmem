@@ -263,6 +263,9 @@ def test_the_context_and_the_activity_show_the_memory_for_everyone(
     assert context["everyone"] == {"memories": 1, "summaries_due": 0, "max_bytes": 280}
     assert context["personal"]["store"] == "missing"
     assert 'scope="everyone"' in registered.prompt({"cwd": str(project)})
+    prompt = registered.prompt({"cwd": str(project)})
+    assert "general knowledge that stays useful in other projects" in prompt
+    assert 'memo.recall(r"postgres|migration", scope="everyone")' in prompt
 
 
 def test_the_prompt_leaves_out_the_tools_that_are_turned_off(registered, monkeypatch):

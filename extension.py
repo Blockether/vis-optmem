@@ -10,7 +10,7 @@ DEFAULT_LIMIT = next(size.default for size in SIZES if size.name == "ENTRY_CHARS
 
 PROMPT = """memo surface active: permanent memory in two memories.
 - scope="personal", the default: your own memory, shared by your sessions.
-- scope="everyone": one memory that every person who uses it shares.
+- scope="everyone": shared knowledge for every person and every project: general lessons that stay useful later.
   memo.wake(part=1, at=None, scope="personal")   read a memory
   memo.note(memory, scope="personal")            save one memory: one line of at most {limit} bytes
   memo.nap(block, summary, scope="personal")     save a summary that memo asks for
@@ -20,7 +20,10 @@ PROMPT = """memo surface active: permanent memory in two memories.
 Each result has a `text` field. Print it and do what it says. Find the other tools with apropos(r"^memo\\.").
 - Read your memory once in each session, before other work: print((await memo.wake()).text). Continue until it says "You are awake."
 - Save a memory for each new fact of lasting value: decisions, results of real work, what the user teaches you, facts about the user's life, events with lasting effect.
-- Save to scope="everyone" only facts that help every person and that every person may read: team decisions, project conventions, shared results. Keep facts about the user, preferences and private data personal.
+- Save to scope="everyone" general knowledge that stays useful in other projects: best practices, reusable solutions, pitfalls with their fixes, team conventions. Every person must be allowed to read it.
+- Keep project details, facts about the user, preferences and private data in the personal memory.
+- Write each memory for everyone so that it stands alone and a search finds it: name the technology, the problem and the solution in plain words. Leave out local paths and session details.
+- Before you plan a task or choose a tool, search both memories for its key words, for example memo.recall(r"postgres|migration", scope="everyone").
 - Never save passwords, keys or other secrets in either memory.
 - Do not save a memory that you already have.
 - When a result asks for a summary, save it with the call in its text, before your next action. The call names the memory. session["memo"]["personal"]["summaries_due"] and session["memo"]["everyone"]["summaries_due"] count the summaries that are due.
