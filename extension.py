@@ -8,27 +8,25 @@ from vis_optmem.store import SIZES
 CONTENT_LIMIT = 4000
 DEFAULT_LIMIT = next(size.default for size in SIZES if size.name == "ENTRY_CHARS")
 
-PROMPT = """memo surface active: permanent memory in two memories.
-- scope="personal", the default: your own memory, shared by your sessions.
-- scope="everyone": shared knowledge for every person and every project: general lessons that stay useful later.
-- scope="all": only memo.recall takes it, and searches both memories. Each line starts with its memory, like [everyone].
-  memo.wake(part=1, at=None, scope="personal")   read a memory
-  memo.note(memory, scope="personal")            save one memory: one line of at most {limit} bytes
-  memo.nap(block, summary, scope="personal")     save a summary that memo asks for
-  memo.recall(pattern, about=None, scope="personal")   search memories: a regex word for word, about="<plain words>" by meaning, or both; scope="all" searches both memories
-  memo.zoom(block, scope="personal")             open a summary into its two halves
-  memo.forget(block, scope="personal")           drop a wrong summary; memo asks for it again
-Each result has a `text` field. Print it and do what it says. Find the other tools with apropos(r"^memo\\.").
-- Read your memory once in each session, before other work: print((await memo.wake()).text). Continue until it says "You are awake."
-- Save a memory for each new fact of lasting value: decisions, results of real work, what the user teaches you, facts about the user's life, events with lasting effect.
-- Save to scope="everyone" general knowledge that stays useful in other projects: best practices, reusable solutions, pitfalls with their fixes, team conventions. Every person must be allowed to read it.
-- Keep project details, facts about the user, preferences and private data in the personal memory.
-- Write each memory for everyone so that it stands alone and a search finds it: name the technology, the problem and the solution in plain words. Leave out local paths and session details.
-- Before you plan a task or choose a tool, search both memories for it in one call, for example memo.recall(r"postgres|migration", about="change a database schema safely", scope="all").
+PROMPT = """memo surface active: permanent memory that lasts across sessions, in two memories.
+- "personal", the default: your own memory. Facts about the user, preferences and project details.
+- "everyone": one memory that every person shares. General knowledge that stays useful in other projects: best practices, reusable solutions, pitfalls with their fixes, team conventions.
+Each tool takes scope="personal" or scope="everyone". memo.recall also takes scope="all": it searches both memories, and each line starts with its memory, like [everyone].
+  memo.wake(part=1, at=None, scope="personal")              read a memory
+  memo.note(memory, scope="personal")                       save one fact: one line of at most {limit} bytes
+  memo.nap(block, summary, scope="personal")                save a summary that a result asks for
+  memo.recall(pattern=None, about=None, scope="personal")   search: pattern is a regex, about is plain words matched by meaning; give one or both
+  memo.zoom(block, scope="personal")                        open a summary into its two halves
+  memo.forget(block, scope="personal")                      drop a wrong summary; memo asks for it again
+Each result has a `text` field. Print it and do what it says. apropos(r"^memo\\.") lists the other tools.
+- At the start of each session, before other work, read your memory: print((await memo.wake()).text). Run each "Next:" call that a result gives until a result says "You are awake." This also reads the memory for everyone when it is set.
+- Before you plan a task or choose a tool, search both memories in one call, for example memo.recall(r"postgres|migration", about="change a database schema safely", scope="all").
+- Save each new fact of lasting value when you learn it: decisions, results of real work, what the user teaches you, facts about the user's life, events with lasting effect.
+- Save to scope="everyone" only general knowledge that stays useful in other projects and that every person may read. Write it so that it stands alone and a search finds it: name the technology, the problem and the solution in plain words, without local paths or session details.
+- Save each fact once, in one memory. When you are not sure that a fact is new, search first.
 - Never save passwords, keys or other secrets in either memory.
-- Do not save a memory that you already have.
-- When a result asks for a summary, save it with the call in its text, before your next action. The call names the memory. session["memo"]["personal"]["summaries_due"] and session["memo"]["everyone"]["summaries_due"] count the summaries that are due.
-- If session["memo"]["everyone"]["store"] is "unset", there is no memory for everyone. Do not use scope="everyone".
+- When a result asks for a summary, save it with the call in that result, before your next action. session["memo"]["personal"]["summaries_due"] and session["memo"]["everyone"]["summaries_due"] count the summaries that are due.
+- If session["memo"]["everyone"]["store"] is "unset", there is no memory for everyone: use only the personal memory.
 - If session["agent"]["role"] is "subagent", do not use memo.
 - Do not change the memory files yourself. memo owns them."""
 

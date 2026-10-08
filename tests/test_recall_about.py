@@ -43,7 +43,7 @@ def test_a_pattern_and_about_give_one_result_without_repeats(memo):
 
 
 def test_a_recall_needs_a_pattern_or_about(memo):
-    with pytest.raises(ValueError, match="pattern, about, or both"):
+    with pytest.raises(ValueError, match=r"about \(plain words\), or both"):
         memo.recall()
     with pytest.raises(ValueError, match="about is empty"):
         memo.recall(about="  ")

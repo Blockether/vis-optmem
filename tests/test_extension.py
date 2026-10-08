@@ -290,3 +290,17 @@ def test_the_prompt_leaves_out_the_tools_that_are_turned_off(registered, monkeyp
     assert registered.prompt({}).endswith(
         "Every memo tool fails until the setting is fixed."
     )
+
+
+def test_every_parameter_is_described_and_scope_lists_its_values(registered):
+    members = registered.symbols[0].contract["members"]
+    for member in members:
+        for parameter in member["parameters"]:
+            described = parameter["type"].get("description", "")
+            assert described.endswith("."), (member["name"], parameter["name"])
+            if parameter["name"] == "scope":
+                values = ["personal", "everyone"]
+                if member["name"] == "memo.recall":
+                    values.append("all")
+                assert parameter["type"]["values"] == values, member["name"]
+                assert parameter["default_source"] == "'personal'"

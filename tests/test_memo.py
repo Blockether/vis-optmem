@@ -280,7 +280,7 @@ def test_forget_drops_a_summary_and_nap_asks_for_it_again(memo):
     assert dropped.blocks == ("2-3", "0-3")
     assert dropped.text.endswith("Call memo.nap() to write them again.")
     assert memo.nap().request.block == "2-3"
-    with pytest.raises(ValueError, match="No summary at 2-3"):
+    with pytest.raises(ValueError, match="No summary at #2-3"):
         memo.forget("2-3")
 
 
@@ -334,7 +334,10 @@ def test_import_adds_dated_memories_in_order(memo, tmp_path):
 @pytest.mark.parametrize(
     ("content", "message"),
     [
-        ("2024-01-01 fine\n2023-12-31 earlier\n", "Line 2: 2023-12-31 is before"),
+        (
+            "2024-01-01 fine\n2023-12-31 earlier\n",
+            "Line 2: 2023-12-31 is earlier than 2024-01-01",
+        ),
         ("2024-02-30 no such day\n", "Line 1: 2024-02-30 is not a real date"),
         ("yesterday something\n", "Line 1: expected"),
         ("2024-01-01 " + "x" * 281 + "\n", "Line 1: 281 bytes"),

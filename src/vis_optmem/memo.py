@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from importlib import metadata
 from itertools import zip_longest
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 from vis_optmem.cover import cover
 from vis_optmem.store import (
@@ -95,6 +95,22 @@ def _plural(count: int, one: str, many: str) -> str:
 
 def _block_name(lo: int, hi: int) -> str:
     return f"{lo}-{hi - 1}"
+
+
+MemoryScope = Annotated[
+    Literal["personal", "everyone"],
+    'Which memory: "personal" (yours, the default) or "everyone" (shared by every person).',
+]
+
+SearchScope = Annotated[
+    Literal["personal", "everyone", "all"],
+    'Which memory to search: "personal" (the default), "everyone", or "all" for both at once.',
+]
+
+Block = Annotated[
+    str,
+    'A block of memories, both ends included, like "16-31". Copy it from a summary line.',
+]
 
 
 def check_scope(scope: str) -> str:
@@ -331,14 +347,14 @@ class Sizes:
 
 @dataclass(frozen=True, slots=True)
 class StoreInfo:
-    """The memory folder."""
+    """The memory that init found or created."""
 
-    text: Annotated[str, "What to read: whether the folder is new."]
+    text: Annotated[str, "What to read: whether the memory is new, and where it is."]
     path: Annotated[
         str, "Where the memory is: its folder, or the place of a custom store."
     ]
     memories: Annotated[int, "Number of memories."]
-    is_new: Annotated[bool, "True when this call created the folder."]
+    is_new: Annotated[bool, "True when this call created the memory."]
     scope: Annotated[str, "The memory: personal or everyone."] = PERSONAL
 
 
@@ -525,8 +541,9 @@ class Memo:
         path = self._path(scope)
         if path is None:
             raise MemoryNotSet(
-                "No memory for everyone is set. Set MEMORY_EVERYONE_DIR to a folder that "
-                "every person reaches, or MEMORY_EVERYONE_STORE to a shared store."
+                "No memory for everyone is set, so use the personal memory. To set one, "
+                "set MEMORY_EVERYONE_DIR to a folder that every person reaches, or "
+                "MEMORY_EVERYONE_STORE to a shared store."
             )
         if (
             scope == EVERYONE
@@ -600,14 +617,18 @@ class Memo:
     def _awake(self, scope: str) -> str:
         """The last line of a complete read: the memory for everyone comes next when set."""
         if scope == PERSONAL and self._is_set(EVERYONE):
-            return f"Next, read the memory for everyone: await {_call('wake', scope=EVERYONE)}"
+            return (
+                "Personal memory read. Read the memory for everyone too. "
+                f"Next: await {_call('wake', scope=EVERYONE)}"
+            )
         return "You are awake."
 
-    def init(self, scope: str = PERSONAL) -> StoreInfo:
-        """Create the memory folder when it does not exist. Calling it again changes nothing.
+    def init(self, scope: MemoryScope = PERSONAL) -> StoreInfo:
+        """Create a memory when it does not exist. Calling it again changes nothing.
 
-        A new folder is a new memory. So wake and note never create one: a wrong
-        MEMORY_DIR stops them instead of starting an empty memory.
+        Call it once for each memory, before its first note. wake and note never
+        create a memory, so a wrong MEMORY_DIR or MEMORY_EVERYONE_DIR stops them
+        instead of starting an empty memory.
         """
         self._allow("init")
         store = self._store(scope)
@@ -626,22 +647,33 @@ class Memo:
         path = str(store.directory) if isinstance(store, FileStore) else place
         return StoreInfo(text, path, count, is_new, scope)
 
-    def wake(self, part: int = 1, at: int | None = None, scope: str = PERSONAL) -> Wake:
-        """Read your memory: recent memories in full, older ones as summaries.
+    def wake(
+        self,
+        part: Annotated[
+            int,
+            "Part to read, from 1. Each part fits one print and names the next call.",
+        ] = 1,
+        at: Annotated[
+            int | None,
+            "Memory count of part 1. Copy it from the Next: call. Leave it out for part 1.",
+        ] = None,
+        scope: MemoryScope = PERSONAL,
+    ) -> Wake:
+        """Read a memory: recent memories in full, older periods as summaries.
 
-        Read it at the start of each session. A large memory comes in parts that
-        each fit one print. The text of each part gives the call for the next part.
-        ``at`` keeps the memory count of the first part, so notes from other
-        sessions cannot move the part boundaries. Without ``at``, wake reads all
-        current memories. When a summary that the read needs is not written yet,
-        the result has no lines and asks for that summary first. A complete read
-        of the personal memory gives the call that reads the memory for everyone.
+        Read the personal memory at the start of each session. When a memory for
+        everyone is set, the last line gives the call that reads it. A large
+        memory comes in parts that each fit one print, and each part gives the
+        call for the next one. When the read needs a summary that is not written
+        yet, the result has no lines and asks for that summary first.
         """
         self._allow("wake")
         store, sizes = self._open(scope)
         now = store.count()
         if part < 1:
-            raise ValueError("part starts at 1.")
+            raise ValueError(
+                f"part starts at 1. Call {_call('wake', scope=scope)} for the first part."
+            )
         total = now if at is None else at
         if not 0 <= total <= now:
             raise ValueError(
@@ -712,13 +744,21 @@ class Memo:
             scope,
         )
 
-    def note(self, memory: str, scope: str = PERSONAL) -> Saved:
-        """Save one memory: one line of at most ENTRY_CHARS bytes (280 by default).
+    def note(
+        self,
+        memory: Annotated[
+            str,
+            "One fact on one line, at most ENTRY_CHARS bytes (280 by default). "
+            "It can never change.",
+        ],
+        scope: MemoryScope = PERSONAL,
+    ) -> Saved:
+        """Save one fact as a new memory, with the date of today.
 
-        The memory gets the next id and the date of today. The log only grows:
-        nothing can change or remove a saved memory. The result can ask for a
-        summary. Write it before your next action. Save to ``scope="everyone"``
-        only what every person may read.
+        A saved memory never changes and nothing removes it, so save only facts of
+        lasting value. Save to ``scope="everyone"`` only general knowledge that
+        every person may read. The result can ask for a summary: save it with
+        memo.nap() before your next action.
         """
         self._allow("note")
         store, sizes = self._open(scope)
@@ -735,19 +775,29 @@ class Memo:
 
     def nap(
         self,
-        block: str | None = None,
-        summary: str | None = None,
-        scope: str = PERSONAL,
+        block: Annotated[
+            str | None,
+            'Block that the request names, like "16-31". Leave out both arguments '
+            "to see the next request.",
+        ] = None,
+        summary: Annotated[
+            str | None,
+            "One line that summarizes the block, from the lines of the request only.",
+        ] = None,
+        scope: MemoryScope = PERSONAL,
     ) -> Nap:
-        """Save a summary that the memory asked for, and get the next one.
+        """Save a summary that a result asked for, and get the next request.
 
-        Without arguments, return the next summary that is due. Summaries are
-        written in a fixed order, so a block other than the next one is refused.
-        A summary that another session saved first is kept, not replaced.
+        Without arguments, it shows the next summary that is due. Summaries are
+        saved in a fixed order, so a block other than the next one is refused.
+        When another session saved the summary first, that summary stays.
         """
         self._allow("nap")
         if (block is None) != (summary is None):
-            raise ValueError("Give both block and summary, or neither.")
+            raise ValueError(
+                "Give both block and summary, or neither. "
+                f"Call {_call('nap', scope=scope)} to see the block that is due."
+            )
         store, sizes = self._open(scope)
         total = store.count()
         notes = []
@@ -785,39 +835,58 @@ class Memo:
 
     def recall(
         self,
-        pattern: str | None = None,
-        about: str | None = None,
-        scope: str = PERSONAL,
+        pattern: Annotated[
+            str | None,
+            'Regular expression, matched without case against "#id date text", '
+            'like r"postgres|migration".',
+        ] = None,
+        about: Annotated[
+            str | None,
+            'Plain words about the topic, like "change a database schema safely". '
+            "Finds related memories by meaning.",
+        ] = None,
+        scope: SearchScope = PERSONAL,
     ) -> Recall:
         """Search the memories with a regular expression, by meaning, or both.
 
-        ``pattern`` is a regular expression, matched without case. It reads the
-        raw memories, not the summaries, and matches the whole line, so it can
-        also find an id or a date. When the matches do not fit one print, the
-        result keeps the newest ones and gives the total.
+        ``pattern`` finds the memories that contain its words exactly. It reads
+        the memories, not the summaries, so it can also find an id or a date.
+        When the matches do not fit one print, the result keeps the newest ones
+        and gives the total.
 
-        ``about`` is a query in plain words. It finds the related memories, best
-        first, also when they use other words: the store decides how. The
-        default store ranks memories by the words that they share with it.
+        ``about`` finds up to 10 related memories, best first, also when they use
+        other words. The store decides how. The default store ranks memories by
+        the words that they share with ``about``.
 
         ``scope="all"`` searches the personal memory and the memory for everyone
-        in one call. Each line then starts with its memory.
+        in one call. Each line then starts with its memory, like ``[everyone]``.
         """
         self._allow("recall")
         if pattern is None and about is None:
-            raise ValueError("Give a pattern, about, or both.")
+            raise ValueError(
+                "Give pattern (a regular expression), about (plain words), or both, "
+                'like memo.recall(r"uv|poetry", about="Python packaging").'
+            )
         regex = None
         if pattern is not None:
             try:
                 regex = re.compile(pattern, re.IGNORECASE)
             except re.error as error:
-                raise ValueError(f"Bad regular expression: {error}.") from None
+                raise ValueError(
+                    f"Bad regular expression: {error}. To search plain words, "
+                    'give them as about="...".'
+                ) from None
         if about is not None and not about.strip():
             raise ValueError("about is empty. Write what the memories are about.")
         if scope == ALL:
             scopes = [PERSONAL, *([EVERYONE] if self._is_set(EVERYONE) else [])]
+        elif scope in SCOPES:
+            scopes = [scope]
         else:
-            scopes = [check_scope(scope)]
+            raise ValueError(
+                f"scope={scope!r} is not a memory. "
+                f"Use {PERSONAL!r}, {EVERYONE!r} or {ALL!r}."
+            )
         opened = [(name, *self._open(name)) for name in scopes]
         limit = min(VIS_PART_BYTES, *(sizes["PART_CHARS"] for _, _, sizes in opened))
 
@@ -893,11 +962,11 @@ class Memo:
             related,
         )
 
-    def zoom(self, block: str, scope: str = PERSONAL) -> Zoom:
-        """Open a block of the memory into its two halves.
+    def zoom(self, block: Block, scope: MemoryScope = PERSONAL) -> Zoom:
+        """Open a summary into its two halves, to see its detail.
 
-        Each half is a summary, or a memory when it holds one memory. Zoom again
-        into a half to go down to single memories.
+        Each half is a summary, or the memory itself when the half holds one
+        memory. Zoom into a half again to go down to single memories.
         """
         self._allow("zoom")
         store, _ = self._open(scope)
@@ -920,18 +989,21 @@ class Memo:
                 halves.append(f"#{_block_name(start, end)} {summary}")
         return Zoom("\n".join(halves), _block_name(lo, hi), tuple(halves), scope)
 
-    def forget(self, block: str, scope: str = PERSONAL) -> Forgot:
+    def forget(self, block: Block, scope: MemoryScope = PERSONAL) -> Forgot:
         """Drop a wrong summary and every summary that depends on it.
 
-        Later summaries of the same sizes go too. The memories do not change,
-        so memo.nap() asks for the dropped summaries again.
+        The memories stay. Later summaries of the same sizes are dropped too, and
+        memo.nap() then asks for each of them again.
         """
         self._allow("forget")
         store, _ = self._open(scope)
         lo, hi = parse_block(block)
         dropped = store.drop_summaries(lo, hi)
         if not dropped:
-            raise ValueError(f"No summary at {_block_name(lo, hi)}.")
+            raise ValueError(
+                f"No summary at #{_block_name(lo, hi)}. "
+                "Copy a block from a summary line of memo.wake()."
+            )
         names = tuple(_block_name(start, end) for start, end in dropped)
         count = _plural(len(names), "summary", "summaries")
         again = "it" if len(names) == 1 else "them"
@@ -943,13 +1015,17 @@ class Memo:
 
     def config(
         self,
-        changes: Mapping[str, int | None] | None = None,
-        scope: str = PERSONAL,
+        changes: Annotated[
+            Mapping[str, int | None] | None,
+            'Size names and new values, like {"WAKE_LINES": 128}. None as a value '
+            "restores the default. Leave it out to only show the sizes.",
+        ] = None,
+        scope: MemoryScope = PERSONAL,
     ) -> Sizes:
-        """Show the sizes of the memory, or change them.
+        """Show the sizes of a memory, or change them.
 
-        ``changes`` maps size names to new values. None restores the default.
-        Sizes only choose what is shown, so a change rewrites no memory.
+        Sizes only choose what wake shows and how long a line can be, so a change
+        rewrites no memory.
         """
         self._allow("config")
         store, _ = self._open(scope)
@@ -984,12 +1060,17 @@ class Memo:
         )
         return Sizes(text, values, tuple(changed), scope)
 
-    def import_memories(self, path: str, scope: str = PERSONAL) -> Imported:
-        """Add dated memories from a UTF-8 file, to start a memory from older records.
+    def import_memories(
+        self,
+        path: Annotated[
+            str, 'UTF-8 file with one "YYYY-MM-DD text" line for each memory.'
+        ],
+        scope: MemoryScope = PERSONAL,
+    ) -> Imported:
+        """Add dated memories from a file, to start a memory from older records.
 
-        Each line is ``YYYY-MM-DD text``. Dates must not go back in time, also not
-        before the newest memory. Empty lines are skipped. If one line is wrong,
-        nothing is added.
+        The dates must not go back in time, also not before the newest memory.
+        Empty lines are skipped. When one line is wrong, nothing is added.
         """
         self._allow("import_memories")
         store, sizes = self._open(scope)
@@ -1018,11 +1099,14 @@ class Memo:
                 raise ValueError(f"Line {number}: {date} is not a real date.") from None
             if date < last:
                 raise ValueError(
-                    f"Line {number}: {date} is before the memory before it ({last})."
+                    f"Line {number}: {date} is earlier than {last}, the date before it. "
+                    "Sort the lines by date. New lines cannot go before the newest memory."
                 )
             text = text.strip()
             size = len(text.encode("utf-8"))
-            if not text or size > limit:
+            if not text:
+                raise ValueError(f"Line {number}: there is no text after the date.")
+            if size > limit:
                 raise ValueError(
                     f"Line {number}: {size} bytes, and the limit is {limit}."
                 )

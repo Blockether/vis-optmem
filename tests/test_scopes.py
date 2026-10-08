@@ -56,7 +56,8 @@ def test_a_personal_read_leads_to_the_memory_for_everyone(both):
     personal = both.wake()
     assert personal.is_awake
     assert personal.text.splitlines()[-1] == (
-        'Next, read the memory for everyone: await memo.wake(scope="everyone")'
+        "Personal memory read. Read the memory for everyone too. "
+        'Next: await memo.wake(scope="everyone")'
     )
     assert both.wake(scope=EVERYONE).text.splitlines()[-1] == "You are awake."
     first = both.wake(scope=EVERYONE).text
