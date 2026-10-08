@@ -11,13 +11,13 @@ DEFAULT_LIMIT = next(size.default for size in SIZES if size.name == "ENTRY_CHARS
 PROMPT = """memo surface active: permanent memory that lasts across sessions, in two memories.
 - "personal", the default: your own memory. Facts about the user, preferences and project details.
 - "everyone": one memory that every person shares. General knowledge that stays useful in other projects: best practices, reusable solutions, pitfalls with their fixes, team conventions.
-Each tool takes scope="personal" or scope="everyone". memo.recall also takes scope="all": it searches both memories, and each line starts with its memory, like [everyone].
-  memo.wake(part=1, at=None, scope="personal")              read a memory
-  memo.note(memory, scope="personal")                       save one fact: one line of at most {limit} bytes
-  memo.nap(block, summary, scope="personal")                save a summary that a result asks for
-  memo.recall(pattern=None, about=None, scope="personal")   search: pattern is a regex, about is plain words matched by meaning; give one or both
-  memo.zoom(block, scope="personal")                        open a summary into its two halves
-  memo.forget(block, scope="personal")                      drop a wrong summary; memo asks for it again
+Each tool takes scope="personal" (the default) or scope="everyone". memo.recall also takes scope="all": it searches both memories, and each line starts with its memory, like [everyone].
+  memo.wake(part=1, at=None)              read a memory
+  memo.note(memory)                       save one fact: one line of at most {limit} bytes
+  memo.nap(block, summary)                save a summary that a result asks for
+  memo.recall(pattern=None, about=None)   search: pattern is a regex, about is plain words matched by meaning; give one or both
+  memo.zoom(block)                        open a summary into its two halves
+  memo.forget(block)                      drop a wrong summary; memo asks for it again
 Each result has a `text` field. Print it and do what it says. apropos(r"^memo\\.") lists the other tools.
 - At the start of each session, before other work, read your memory: print((await memo.wake()).text). Run each "Next:" call that a result gives until a result says "You are awake." This also reads the memory for everyone when it is set.
 - Before you plan a task or choose a tool, search both memories in one call, for example memo.recall(r"postgres|migration", about="change a database schema safely", scope="all").
