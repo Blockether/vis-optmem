@@ -14,7 +14,7 @@ PROMPT = """memo surface active: permanent memory in two memories.
   memo.wake(part=1, at=None, scope="personal")   read a memory
   memo.note(memory, scope="personal")            save one memory: one line of at most {limit} bytes
   memo.nap(block, summary, scope="personal")     save a summary that memo asks for
-  memo.recall(pattern, scope="personal")         search every memory with a regex, word for word
+  memo.recall(pattern, about=None, scope="personal")   search memories: a regex word for word, about="<plain words>" by meaning, or both
   memo.zoom(block, scope="personal")             open a summary into its two halves
   memo.forget(block, scope="personal")           drop a wrong summary; memo asks for it again
 Each result has a `text` field. Print it and do what it says. Find the other tools with apropos(r"^memo\\.").
@@ -23,7 +23,7 @@ Each result has a `text` field. Print it and do what it says. Find the other too
 - Save to scope="everyone" general knowledge that stays useful in other projects: best practices, reusable solutions, pitfalls with their fixes, team conventions. Every person must be allowed to read it.
 - Keep project details, facts about the user, preferences and private data in the personal memory.
 - Write each memory for everyone so that it stands alone and a search finds it: name the technology, the problem and the solution in plain words. Leave out local paths and session details.
-- Before you plan a task or choose a tool, search both memories for its key words, for example memo.recall(r"postgres|migration", scope="everyone").
+- Before you plan a task or choose a tool, search both memories for it, for example memo.recall(r"postgres|migration", about="change a database schema safely", scope="everyone").
 - Never save passwords, keys or other secrets in either memory.
 - Do not save a memory that you already have.
 - When a result asks for a summary, save it with the call in its text, before your next action. The call names the memory. session["memo"]["personal"]["summaries_due"] and session["memo"]["everyone"]["summaries_due"] count the summaries that are due.
@@ -98,15 +98,23 @@ def _nap(result):
 
 
 def _recall(result):
-    if not result.total:
-        return f"No match for {result.pattern}", ""
-    found = _count(result.total, "match", "matches")
-    shown = (
-        f", newest {len(result.matches)} shown"
-        if len(result.matches) < result.total
-        else ""
-    )
-    return f"{found} for {result.pattern}{shown}", "\n".join(result.matches)
+    parts = []
+    if result.pattern is not None:
+        if not result.total:
+            parts.append(f"No match for {result.pattern}")
+        else:
+            found = _count(result.total, "match", "matches")
+            shown = (
+                f", newest {len(result.matches)} shown"
+                if len(result.matches) < result.total
+                else ""
+            )
+            parts.append(f"{found} for {result.pattern}{shown}")
+    if result.about is not None:
+        related = _count(len(result.related), "memory", "memories")
+        parts.append(f"{related} related to {result.about}")
+    extra = [line for line in result.related if line not in result.matches]
+    return " · ".join(parts), "\n".join([*result.matches, *extra])
 
 
 def _zoom(result):

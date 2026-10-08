@@ -18,6 +18,7 @@ Its writers hold an exclusive lock on ``.lock``: the same lock that the ``memo``
 from __future__ import annotations
 
 import contextlib
+import math
 import os
 import re
 import time
@@ -35,6 +36,8 @@ LOG_RECORD = 320
 TREE_RECORD = 288
 DEFAULT_DIRECTORY = "~/.optmem/memory"
 LOCK_TIMEOUT_S = 30.0
+STEM_LETTERS = 6
+"""Words that share their first letters match in the default search: migrate, migrations."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +82,15 @@ class Entry:
     @property
     def line(self) -> str:
         return f"#{self.id} {self.date} {self.text}"
+
+
+def _stems(text: str) -> set[str]:
+    """The words of ``text`` for the default search: lowercase, first letters only."""
+    return {
+        word[:STEM_LETTERS]
+        for word in re.findall(r"\w+", text.lower())
+        if len(word) >= 3
+    }
 
 
 def pretty(path: Path) -> str:
@@ -244,6 +256,35 @@ class MemoryStore(ABC):
         total = self.count()
         for lo in range(0, total, 4096):
             yield from self.entries(lo, min(lo + 4096, total))
+
+    def search(self, query: str, limit: int) -> list[Entry]:
+        """Memories related to ``query``, best first: at most ``limit`` of them.
+
+        Override it to search by meaning, for example with embeddings in your
+        service. The default ranks memories by the words that they share with
+        ``query``, and rare words count more. Words of 3 or more letters match
+        when their first 6 letters are the same. It reads every memory once.
+        """
+        stems = _stems(query)
+        if not stems or limit < 1:
+            return []
+        found = dict.fromkeys(stems, 0)
+        candidates = []
+        total = 0
+        for entry in self.scan():
+            total += 1
+            shared = stems & _stems(entry.text)
+            if shared:
+                for stem in shared:
+                    found[stem] += 1
+                candidates.append((entry, shared))
+        weight = {
+            stem: math.log(1 + total / count) for stem, count in found.items() if count
+        }
+        candidates.sort(
+            key=lambda item: (-sum(weight[s] for s in item[1]), -item[0].id)
+        )
+        return [entry for entry, _ in candidates[:limit]]
 
     # Summaries
 

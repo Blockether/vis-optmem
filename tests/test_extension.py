@@ -164,6 +164,11 @@ def test_recall_shows_no_match_every_match_and_a_partial_list(memo):
     assert shown("recall", found) == ("1 match for alpha", [found.matches[0]])
     partial = Recall(text="", pattern="a", matches=("#1 b",), total=2)
     assert shown("recall", partial) == ("2 matches for a, newest 1 shown", ["#1 b"])
+    both = Recall("", "a", ("#1 b",), 1, about="b c", related=("#1 b", "#2 c"))
+    assert shown("recall", both) == (
+        "1 match for a · 2 memories related to b c",
+        ["#1 b\n#2 c"],
+    )
 
 
 def test_zoom_and_forget_name_the_block(memo):
@@ -265,7 +270,10 @@ def test_the_context_and_the_activity_show_the_memory_for_everyone(
     assert 'scope="everyone"' in registered.prompt({"cwd": str(project)})
     prompt = registered.prompt({"cwd": str(project)})
     assert "general knowledge that stays useful in other projects" in prompt
-    assert 'memo.recall(r"postgres|migration", scope="everyone")' in prompt
+    assert (
+        'memo.recall(r"postgres|migration", about="change a database schema safely", '
+        'scope="everyone")'
+    ) in prompt
 
 
 def test_the_prompt_leaves_out_the_tools_that_are_turned_off(registered, monkeypatch):

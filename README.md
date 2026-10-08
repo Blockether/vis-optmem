@@ -26,6 +26,7 @@ memo.wake()                          # read the memory: new memories in full, ol
 memo.note("The user prefers uv.")    # save one memory: one line of at most 280 bytes
 memo.nap("0-1", "<one line>")        # save a summary that a result asks for
 memo.recall(r"uv|poetry")            # search every memory with a regular expression
+memo.recall(about="Python packaging") # find related memories by meaning
 memo.zoom("0-15")                    # open a summary into its two halves
 memo.forget("0-15")                  # drop a wrong summary; memo asks for it again
 memo.config({"WAKE_LINES": 128})     # show or change the sizes
@@ -133,6 +134,7 @@ instead of a folder. Write a store for that place, then select it with two setti
    | `put_summary(lo, hi, text)`                  | Save the next summary of a level                |
    | `drop_summaries(lo, hi)`                     | Remove a summary and the summaries after it     |
    | `overrides()`, `write_overrides(overrides)`  | Read and write the sizes                        |
+   | `search(query, limit)`, optional             | Find related memories for `memo.recall(about=)` |
 
    Make each write atomic, because many sessions write at the same time. The docstrings of
    `MemoryStore` give the exact contract.
@@ -165,6 +167,25 @@ store with the standard library: `sqlite3` for a local file, or `urllib.request`
 service, for example an API in front of your database.
 
 In Python, give the store directly: `Memo(store=MyStore(...))`.
+
+## Search by meaning
+
+`memo.recall()` searches in two ways, alone or together in one call:
+
+- `pattern`: a regular expression that matches the words of a memory exactly.
+- `about`: a query in plain words. The result lists up to 10 related memories, best first.
+
+```python
+memo.recall(r"postgres|migration", about="change a database schema safely", scope="everyone")
+```
+
+The store decides what "related" means. The default `search` ranks memories by the words that
+they share with the query, and rare words count more. Words match when their first 6 letters are
+the same, so "migrate" finds "migrations". It does not know synonyms or other languages.
+
+For a real search by meaning, override `search(query, limit)` in your store. For example, an
+HTTP service on AWS can keep an embedding of each memory and return the nearest ones. The agent
+calls the same `memo.recall(about=...)` in both cases.
 
 ## Sizes
 

@@ -34,6 +34,9 @@ from vis_optmem.store import (
 NAMESPACE = "memo"
 """The name that Vis gives the tools. Next-step calls in ``text`` use it."""
 
+RELATED_LIMIT = 10
+"""Most related memories that one recall shows."""
+
 RAW_BLOCK_LIMIT = 16
 """Blocks of at most this many memories are summarized from the memories themselves.
 
@@ -255,16 +258,20 @@ class Nap:
 
 @dataclass(frozen=True, slots=True)
 class Recall:
-    """Memories that match a pattern."""
+    """Memories that match a pattern, and memories related to a query."""
 
-    text: Annotated[str, "What to read: the matching memories and their count."]
-    pattern: Annotated[str, "The regular expression, matched without case."]
+    text: Annotated[str, "What to read: the matching and the related memories."]
+    pattern: Annotated[
+        str | None, "The regular expression, matched without case, or None."
+    ]
     matches: Annotated[
         tuple[str, ...],
         "The newest matching memories that fit one print, oldest first.",
     ]
     total: Annotated[int, "Number of all matching memories."]
     scope: Annotated[str, "The memory: personal or everyone."] = PERSONAL
+    about: Annotated[str | None, "The query for related memories, or None."] = None
+    related: Annotated[tuple[str, ...], "Memories related to about, best first."] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -763,39 +770,84 @@ class Memo:
         text = "\n\n".join(["\n".join(notes), request.text]) if notes else request.text
         return Nap(text, saved, saved_summary, request, scope)
 
-    def recall(self, pattern: str, scope: str = PERSONAL) -> Recall:
-        """Search every memory with a regular expression, without case.
+    def recall(
+        self,
+        pattern: str | None = None,
+        about: str | None = None,
+        scope: str = PERSONAL,
+    ) -> Recall:
+        """Search the memories with a regular expression, by meaning, or both.
 
-        The search reads the raw memories, not the summaries. It matches the
-        whole line, so it can also find an id or a date. When the matches do not
-        fit one print, the result keeps the newest ones and gives the total.
+        ``pattern`` is a regular expression, matched without case. It reads the
+        raw memories, not the summaries, and matches the whole line, so it can
+        also find an id or a date. When the matches do not fit one print, the
+        result keeps the newest ones and gives the total.
+
+        ``about`` is a query in plain words. It finds the related memories, best
+        first, also when they use other words: the store decides how. The
+        default store ranks memories by the words that they share with it.
         """
         self._allow("recall")
+        if pattern is None and about is None:
+            raise ValueError("Give a pattern, about, or both.")
+        regex = None
+        if pattern is not None:
+            try:
+                regex = re.compile(pattern, re.IGNORECASE)
+            except re.error as error:
+                raise ValueError(f"Bad regular expression: {error}.") from None
+        if about is not None and not about.strip():
+            raise ValueError("about is empty. Write what the memories are about.")
         store, sizes = self._open(scope)
-        try:
-            regex = re.compile(pattern, re.IGNORECASE)
-        except re.error as error:
-            raise ValueError(f"Bad regular expression: {error}.") from None
         limit = min(sizes["PART_CHARS"], VIS_PART_BYTES)
+        related: tuple[str, ...] = ()
+        if about is not None:
+            related = tuple(
+                entry.line for entry in store.search(about.strip(), RELATED_LIMIT)
+            )
+            limit -= sum(len(line.encode("utf-8")) + 1 for line in related) + 100
         kept: deque[str] = deque()
         used = total = 0
-        for entry in store.scan():
-            line = entry.line
-            if not regex.search(line):
-                continue
-            total += 1
-            kept.append(line)
-            used += len(line.encode("utf-8")) + 1
-            while used > limit:
-                used -= len(kept.popleft().encode("utf-8")) + 1
-        if not total:
-            return Recall("No match.", pattern, (), 0, scope)
-        count = _plural(total, "match", "matches")
-        if len(kept) < total:
-            tail = f"Newest {len(kept)} of {count}. Use a narrower pattern."
-        else:
-            tail = f"{count}."
-        return Recall("\n".join([*kept, tail]), pattern, tuple(kept), total, scope)
+        if regex is not None:
+            for entry in store.scan():
+                line = entry.line
+                if not regex.search(line):
+                    continue
+                total += 1
+                kept.append(line)
+                used += len(line.encode("utf-8")) + 1
+                while used > limit:
+                    used -= len(kept.popleft().encode("utf-8")) + 1
+        out: list[str] = []
+        if regex is not None:
+            if not total:
+                out.append("No match.")
+            else:
+                count = _plural(total, "match", "matches")
+                if len(kept) < total:
+                    tail = f"Newest {len(kept)} of {count}. Use a narrower pattern."
+                else:
+                    tail = f"{count}."
+                out += [*kept, tail]
+        if about is not None:
+            seen = set(kept)
+            new = [line for line in related if line not in seen]
+            if out:
+                out.append("")
+            if not related:
+                out.append(f"Nothing related to {about.strip()!r}.")
+            else:
+                out.append(f"Related to {about.strip()!r}, best first:")
+                out += new or ["(all of them are above)"]
+        return Recall(
+            "\n".join(out),
+            pattern,
+            tuple(kept),
+            total,
+            scope,
+            about,
+            related,
+        )
 
     def zoom(self, block: str, scope: str = PERSONAL) -> Zoom:
         """Open a block of the memory into its two halves.
