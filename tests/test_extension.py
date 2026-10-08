@@ -272,7 +272,7 @@ def test_the_context_and_the_activity_show_the_memory_for_everyone(
     assert "general knowledge that stays useful in other projects" in prompt
     assert (
         'memo.recall(r"postgres|migration", about="change a database schema safely", '
-        'scope="everyone")'
+        'scope="all")'
     ) in prompt
 
 

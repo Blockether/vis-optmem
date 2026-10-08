@@ -11,10 +11,11 @@ DEFAULT_LIMIT = next(size.default for size in SIZES if size.name == "ENTRY_CHARS
 PROMPT = """memo surface active: permanent memory in two memories.
 - scope="personal", the default: your own memory, shared by your sessions.
 - scope="everyone": shared knowledge for every person and every project: general lessons that stay useful later.
+- scope="all": only memo.recall takes it, and searches both memories. Each line starts with its memory, like [everyone].
   memo.wake(part=1, at=None, scope="personal")   read a memory
   memo.note(memory, scope="personal")            save one memory: one line of at most {limit} bytes
   memo.nap(block, summary, scope="personal")     save a summary that memo asks for
-  memo.recall(pattern, about=None, scope="personal")   search memories: a regex word for word, about="<plain words>" by meaning, or both
+  memo.recall(pattern, about=None, scope="personal")   search memories: a regex word for word, about="<plain words>" by meaning, or both; scope="all" searches both memories
   memo.zoom(block, scope="personal")             open a summary into its two halves
   memo.forget(block, scope="personal")           drop a wrong summary; memo asks for it again
 Each result has a `text` field. Print it and do what it says. Find the other tools with apropos(r"^memo\\.").
@@ -23,7 +24,7 @@ Each result has a `text` field. Print it and do what it says. Find the other too
 - Save to scope="everyone" general knowledge that stays useful in other projects: best practices, reusable solutions, pitfalls with their fixes, team conventions. Every person must be allowed to read it.
 - Keep project details, facts about the user, preferences and private data in the personal memory.
 - Write each memory for everyone so that it stands alone and a search finds it: name the technology, the problem and the solution in plain words. Leave out local paths and session details.
-- Before you plan a task or choose a tool, search both memories for it, for example memo.recall(r"postgres|migration", about="change a database schema safely", scope="everyone").
+- Before you plan a task or choose a tool, search both memories for it in one call, for example memo.recall(r"postgres|migration", about="change a database schema safely", scope="all").
 - Never save passwords, keys or other secrets in either memory.
 - Do not save a memory that you already have.
 - When a result asks for a summary, save it with the call in its text, before your next action. The call names the memory. session["memo"]["personal"]["summaries_due"] and session["memo"]["everyone"]["summaries_due"] count the summaries that are due.

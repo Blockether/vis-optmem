@@ -16,6 +16,7 @@ from collections import deque
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from importlib import metadata
+from itertools import zip_longest
 from pathlib import Path
 from typing import Annotated
 
@@ -48,6 +49,9 @@ PERSONAL = "personal"
 
 EVERYONE = "everyone"
 """The memory that every person shares: ``MEMORY_EVERYONE_DIR`` or ``MEMORY_EVERYONE_STORE``."""
+
+ALL = "all"
+"""Both memories at once. Only ``memo.recall`` takes it: a write goes to one memory."""
 
 SCOPES = (PERSONAL, EVERYONE)
 
@@ -95,6 +99,11 @@ def _block_name(lo: int, hi: int) -> str:
 
 def check_scope(scope: str) -> str:
     """Return ``scope`` if it names a memory, or raise ValueError."""
+    if scope == ALL:
+        raise ValueError(
+            f"scope={ALL!r} works only with {NAMESPACE}.recall. "
+            f"Use {PERSONAL!r} or {EVERYONE!r}."
+        )
     if scope not in SCOPES:
         raise ValueError(
             f"scope={scope!r} is not a memory. Use {PERSONAL!r} or {EVERYONE!r}."
@@ -258,7 +267,11 @@ class Nap:
 
 @dataclass(frozen=True, slots=True)
 class Recall:
-    """Memories that match a pattern, and memories related to a query."""
+    """Memories that match a pattern, and memories related to a query.
+
+    With ``scope="all"``, each line starts with its memory, like ``[everyone] #3 ...``,
+    because both memories number their memories from 0.
+    """
 
     text: Annotated[str, "What to read: the matching and the related memories."]
     pattern: Annotated[
@@ -269,7 +282,7 @@ class Recall:
         "The newest matching memories that fit one print, oldest first.",
     ]
     total: Annotated[int, "Number of all matching memories."]
-    scope: Annotated[str, "The memory: personal or everyone."] = PERSONAL
+    scope: Annotated[str, "The memory: personal, everyone or all."] = PERSONAL
     about: Annotated[str | None, "The query for related memories, or None."] = None
     related: Annotated[tuple[str, ...], "Memories related to about, best first."] = ()
 
@@ -786,6 +799,9 @@ class Memo:
         ``about`` is a query in plain words. It finds the related memories, best
         first, also when they use other words: the store decides how. The
         default store ranks memories by the words that they share with it.
+
+        ``scope="all"`` searches the personal memory and the memory for everyone
+        in one call. Each line then starts with its memory.
         """
         self._allow("recall")
         if pattern is None and about is None:
@@ -798,27 +814,55 @@ class Memo:
                 raise ValueError(f"Bad regular expression: {error}.") from None
         if about is not None and not about.strip():
             raise ValueError("about is empty. Write what the memories are about.")
-        store, sizes = self._open(scope)
-        limit = min(sizes["PART_CHARS"], VIS_PART_BYTES)
+        if scope == ALL:
+            scopes = [PERSONAL, *([EVERYONE] if self._is_set(EVERYONE) else [])]
+        else:
+            scopes = [check_scope(scope)]
+        opened = [(name, *self._open(name)) for name in scopes]
+        limit = min(VIS_PART_BYTES, *(sizes["PART_CHARS"] for _, _, sizes in opened))
+
+        def label(name: str, line: str) -> str:
+            return f"[{name}] {line}" if scope == ALL else line
+
         related: tuple[str, ...] = ()
         if about is not None:
-            related = tuple(
-                entry.line for entry in store.search(about.strip(), RELATED_LIMIT)
-            )
+            ranked = [
+                [
+                    label(name, entry.line)
+                    for entry in store.search(about.strip(), RELATED_LIMIT)
+                ]
+                for name, store, _ in opened
+            ]
+            # Each store ranks only its own memories, so take the best of each in turn.
+            mixed = [line for row in zip_longest(*ranked) for line in row if line]
+            related = tuple(mixed[:RELATED_LIMIT])
             limit -= sum(len(line.encode("utf-8")) + 1 for line in related) + 100
-        kept: deque[str] = deque()
-        used = total = 0
+        # (date, id, memory, line): on one date, the two memories alternate by id.
+        found: list[tuple[str, int, int, str]] = []
+        total = 0
         if regex is not None:
-            for entry in store.scan():
-                line = entry.line
-                if not regex.search(line):
-                    continue
-                total += 1
-                kept.append(line)
-                used += len(line.encode("utf-8")) + 1
-                while used > limit:
-                    used -= len(kept.popleft().encode("utf-8")) + 1
+            for order, (name, store, _) in enumerate(opened):
+                newest: deque[tuple[str, int, int, str]] = deque()
+                used = 0
+                for entry in store.scan():
+                    if not regex.search(entry.line):
+                        continue
+                    total += 1
+                    line = label(name, entry.line)
+                    newest.append((entry.date, entry.id, order, line))
+                    used += len(line.encode("utf-8")) + 1
+                    while used > limit:
+                        used -= len(newest.popleft()[3].encode("utf-8")) + 1
+                found += newest
+        # Keep the newest matches of all memories that fit one print, oldest first.
+        found.sort()
+        used = sum(len(item[3].encode("utf-8")) + 1 for item in found)
+        while used > limit:
+            used -= len(found.pop(0)[3].encode("utf-8")) + 1
+        kept = [item[3] for item in found]
         out: list[str] = []
+        if scope == ALL and len(opened) == 1:
+            out += ["Only the personal memory: no memory for everyone is set.", ""]
         if regex is not None:
             if not total:
                 out.append("No match.")
@@ -832,7 +876,7 @@ class Memo:
         if about is not None:
             seen = set(kept)
             new = [line for line in related if line not in seen]
-            if out:
+            if out and out[-1]:
                 out.append("")
             if not related:
                 out.append(f"Nothing related to {about.strip()!r}.")

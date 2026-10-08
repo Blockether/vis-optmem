@@ -27,13 +27,15 @@ memo.note("The user prefers uv.")    # save one memory: one line of at most 280 
 memo.nap("0-1", "<one line>")        # save a summary that a result asks for
 memo.recall(r"uv|poetry")            # search every memory with a regular expression
 memo.recall(about="Python packaging") # find related memories by meaning
+memo.recall(r"uv", scope="all")      # search both memories in one call
 memo.zoom("0-15")                    # open a summary into its two halves
 memo.forget("0-15")                  # drop a wrong summary; memo asks for it again
 memo.config({"WAKE_LINES": 128})     # show or change the sizes
 memo.import_memories("~/old.txt")    # add dated lines, each "YYYY-MM-DD text"
 ```
 
-Each tool takes `scope="personal"`, the default, or `scope="everyone"`. See
+Each tool takes `scope="personal"`, the default, or `scope="everyone"`. `memo.recall()` also
+takes `scope="all"`, which searches both memories. See
 [Personal and shared memory](#personal-and-shared-memory).
 
 Each result is a typed record with a `text` field. The agent prints the text and does what it says.
@@ -176,8 +178,13 @@ In Python, give the store directly: `Memo(store=MyStore(...))`.
 - `about`: a query in plain words. The result lists up to 10 related memories, best first.
 
 ```python
-memo.recall(r"postgres|migration", about="change a database schema safely", scope="everyone")
+memo.recall(r"postgres|migration", about="change a database schema safely", scope="all")
 ```
+
+With `scope="all"`, each line starts with its memory, for example `[everyone] #3 2025-01-07 ...`,
+because both memories number their memories from 0. The related memories take the best of each
+memory in turn. If no memory for everyone is set, the search uses only the personal memory and
+says so.
 
 The store decides what "related" means. The default `search` ranks memories by the words that
 they share with the query, and rare words count more. Words match when their first 6 letters are
