@@ -65,6 +65,12 @@ tool on. In Python, `Memo(disabled=["init"])` replaces the setting.
   show in full. Older periods show as summaries, and the older the period, the larger its summary.
 - `memo.zoom()` opens a summary when the agent needs its detail. `memo.recall()` searches the
   original memories.
+- `memo.note()` refuses a fact that the memory already holds, because a saved memory never
+  changes and `memo.forget()` drops only summaries. A note is a repeat when it has the same numbers
+  as a memory and shares at least 60% of its words. The result shows that memory. To save a
+  different fact that looks similar, give `force=True`. The check compares the closest memories
+  from the store's `search`, so a store that searches by meaning also finds repeats in other words
+  when they share enough words.
 
 ## Where the memory is
 

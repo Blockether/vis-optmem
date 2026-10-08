@@ -23,7 +23,7 @@ Each result has a `text` field. Print it and do what it says. apropos(r"^memo\\.
 - Before you plan a task or choose a tool, search both memories in one call, for example memo.recall(r"postgres|migration", about="change a database schema safely", scope="all").
 - Save each new fact of lasting value when you learn it: decisions, results of real work, what the user teaches you, facts about the user's life, events with lasting effect.
 - Save to scope="team" only general knowledge that stays useful in other projects and that every person may read. Write it so that it stands alone and a search finds it: name the technology, the problem and the solution in plain words, without local paths or session details.
-- Save each fact once, in one memory. When you are not sure that a fact is new, search first.
+- Save each fact once, in one memory. Memories never change and memo.forget drops only summaries, so memo.note refuses a fact that a memory already says. Then save only what is new. Give force=True only for a different fact.
 - Never save passwords, keys or other secrets in either memory.
 - When a result asks for a summary, save it with the call in that result, before your next action. session["memo"]["personal"]["summaries_due"] counts the summaries that are due.
 - If session["memo"]["team"]["store"] is "unset", there is no team memory: use only the personal memory.

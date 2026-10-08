@@ -25,7 +25,9 @@ from vis_optmem.store import (
     DEFAULT_DIRECTORY,
     SIZE_NAMES,
     SIZES,
+    STEM_LETTERS,
     DamagedSummary,
+    Entry,
     FileStore,
     MemoryStore,
     parse_size,
@@ -34,6 +36,12 @@ from vis_optmem.store import (
 
 NAMESPACE = "memo"
 """The name that Vis gives the tools. Next-step calls in ``text`` use it."""
+
+DUPLICATE_SIMILARITY = 0.6
+"""Share of words that two memories have in common when one repeats the other."""
+
+DUPLICATE_CANDIDATES = 5
+"""Closest memories that memo.note compares with a new note."""
 
 RELATED_LIMIT = 10
 """Most related memories that one recall shows."""
@@ -140,6 +148,36 @@ def _call(method: str, *args: str, scope: str = PERSONAL) -> str:
 
 class MemoryNotSet(LookupError):
     """No folder and no store is set for the team memory."""
+
+
+class DuplicateMemory(ValueError):
+    """A memory already says almost the same as the new note."""
+
+
+def _twin(store: MemoryStore, line: str) -> Entry | None:
+    """The memory that ``line`` repeats, or None.
+
+    ``store.search`` gives the closest memories. A memory is a repeat when it has
+    the same numbers and shares at least DUPLICATE_SIMILARITY of the words of both
+    lines. So "port 5432" and "port 6543" are different facts.
+    """
+    words = _words(line)
+    numbers = {word for word in words if any(c.isdigit() for c in word)}
+    for entry in store.search(line, DUPLICATE_CANDIDATES):
+        other = _words(entry.text)
+        if {word for word in other if any(c.isdigit() for c in word)} != numbers:
+            continue
+        if len(words & other) / len(words | other) >= DUPLICATE_SIMILARITY:
+            return entry
+    return None
+
+
+def _words(text: str) -> set[str]:
+    """Every word of ``text``, lowercase. Words without digits keep their first letters."""
+    return {
+        word if any(c.isdigit() for c in word) else word[:STEM_LETTERS]
+        for word in re.findall(r"\w+", text.lower())
+    }
 
 
 class ToolDisabled(PermissionError):
@@ -746,17 +784,34 @@ class Memo:
             "It can never change.",
         ],
         scope: MemoryScope = PERSONAL,
+        force: Annotated[
+            bool,
+            "True saves the note even when a memory says almost the same. "
+            "Use it only for a different fact.",
+        ] = False,
     ) -> Saved:
         """Save one fact as a new memory, with the date of today.
 
         A saved memory never changes and nothing removes it, so save only facts of
         lasting value. Save to ``scope="team"`` only general knowledge that
-        every person may read. The result can ask for a summary: save it with
-        memo.nap() before your next action.
+        every person may read. When a memory already says almost the same, the
+        note is refused with that memory, so the same fact is not saved twice.
+        The result can ask for a summary: save it with memo.nap() before your next
+        action.
         """
         self._allow("note")
         store, sizes = self._open(scope)
         line = check_line(memory, sizes["ENTRY_CHARS"], what="memory")
+        if not force:
+            twin = _twin(store, line)
+            if twin is not None:
+                retry = _call("note", '"<your line>"', "force=True", scope=scope)
+                raise DuplicateMemory(
+                    f"Not saved: this memory already says it:\n{twin.line}\n"
+                    "Memories never change, so do not save the same fact again. "
+                    "If your fact adds something, save only what is new. "
+                    f"If it is a different fact, call {retry}."
+                )
         date = datetime.date.today().isoformat()
         number = store.append([(date, line)])
         # The team memory is searched, not read, so its notes ask for no summary.
