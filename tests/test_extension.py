@@ -9,7 +9,7 @@ import blockether.vis.extension as vis
 import pytest
 from conftest import fill
 
-from vis_optmem.memo import Memo, Recall, Wake
+from vis_optmem.memo import EVERYONE, Memo, Recall, Saved, Wake
 
 ROOT = Path(__file__).resolve().parents[1]
 TAGS = {
@@ -23,6 +23,14 @@ TAGS = {
     "config": "mutation",
     "import_memories": "mutation",
 }
+ENV = (
+    "MEMORY_DIR",
+    "MEMORY_STORE",
+    "MEMORY_STORE_CONFIG",
+    "MEMORY_EVERYONE_DIR",
+    "MEMORY_EVERYONE_STORE",
+    "MEMORY_EVERYONE_STORE_CONFIG",
+)
 
 
 @pytest.fixture
@@ -49,11 +57,7 @@ def test_registration_exports_nine_typed_methods(registered):
     version = tomllib.loads(pyproject)["project"]["version"]
     assert (registered.name, registered.alias) == ("vis-optmem", "memo")
     assert registered.version == version
-    assert tuple(registered.env) == (
-        "MEMORY_DIR",
-        "MEMORY_STORE",
-        "MEMORY_STORE_CONFIG",
-    )
+    assert tuple(registered.env) == ENV
     assert "Victor Taelin" in registered.description
     members = registered.symbols[0].contract["members"]
     assert {member["name"]: member["tag"] for member in members} == {
@@ -73,11 +77,7 @@ class Host:
         self.folder = folder
 
     def declare_env(self, names_json):
-        assert json.loads(names_json) == [
-            "MEMORY_DIR",
-            "MEMORY_STORE",
-            "MEMORY_STORE_CONFIG",
-        ]
+        assert json.loads(names_json) == list(ENV)
         return json.dumps({"MEMORY_DIR": str(self.folder)})
 
 
@@ -92,7 +92,7 @@ def test_the_host_registration_resolves_memory_dir_and_runs_the_tools(
     assert (spec["name"], spec["alias"], spec["env"]) == (
         "vis-optmem",
         "memo",
-        ["MEMORY_DIR", "MEMORY_STORE", "MEMORY_STORE_CONFIG"],
+        list(ENV),
     )
     tools = {item["name"]: item["fn"] for item in spec["symbols"][0]["methods"]}
     assert sorted(tools) == sorted(TAGS)
@@ -200,13 +200,17 @@ def test_long_content_is_clipped_only_in_the_activity():
 
 def test_prompt_and_context_follow_the_memory_folder(registered, folder, monkeypatch):
     monkeypatch.setenv("MEMORY_DIR", str(folder))
-    assert registered.ctx({})["memo"]["store"] == "missing"
+    assert registered.ctx({})["memo"]["personal"]["store"] == "missing"
+    assert registered.ctx({})["memo"]["everyone"] == {"store": "unset"}
     assert "one line of at most 280 bytes" in registered.prompt({})
     Memo().init()
     Memo().config({"ENTRY_CHARS": 200})
     assert "one line of at most 200 bytes" in registered.prompt({})
     assert registered.ctx({}) == {
-        "memo": {"memories": 0, "summaries_due": 0, "max_bytes": 200}
+        "memo": {
+            "personal": {"memories": 0, "summaries_due": 0, "max_bytes": 200},
+            "everyone": {"store": "unset"},
+        }
     }
 
 
@@ -232,9 +236,29 @@ def test_a_relative_memory_dir_is_in_the_session_workspace(monkeypatch, tmp_path
     tools = {item["name"]: item["fn"] for item in spec["symbols"][0]["methods"]}
     assert tools["init"]().path == str(project / "memory")
     tools["note"]("a fact")
-    assert spec["ctx"]({"cwd": str(project)}) == {
-        "memo": {"memories": 1, "summaries_due": 0, "max_bytes": 280}
+    assert spec["ctx"]({"cwd": str(project)})["memo"]["personal"] == {
+        "memories": 1,
+        "summaries_due": 0,
+        "max_bytes": 280,
     }
     assert "one line of at most 280 bytes" in spec["prompt"]({"cwd": str(project)})
-    assert spec["ctx"]({})["memo"]["store"] == "missing"
+    assert spec["ctx"]({})["memo"]["personal"]["store"] == "missing"
     assert not (tmp_path / "memory").exists()
+
+
+def test_the_context_and_the_activity_show_the_memory_for_everyone(
+    registered, folder, tmp_path, monkeypatch
+):
+    monkeypatch.setenv("MEMORY_DIR", str(folder))
+    monkeypatch.setenv("MEMORY_EVERYONE_DIR", "team")
+    project = tmp_path / "project"
+    tool = Memo(base=lambda: project)
+    tool.init(scope=EVERYONE)
+    saved = tool.note("team fact", scope=EVERYONE)
+    assert shown("note", saved) == ("Saved as #0 · everyone", ["team fact"])
+    personal = Saved("Saved as #0.", 0, "2024-01-01", "my fact", None)
+    assert shown("note", personal) == ("Saved as #0", ["my fact"])
+    context = registered.ctx({"cwd": str(project)})["memo"]
+    assert context["everyone"] == {"memories": 1, "summaries_due": 0, "max_bytes": 280}
+    assert context["personal"]["store"] == "missing"
+    assert 'scope="everyone"' in registered.prompt({"cwd": str(project)})

@@ -1,8 +1,9 @@
 # vis-optmem
 
 Permanent memory for [Vis](https://github.com/Blockether/vis) agents. Every session on your
-computer reads and writes the same memory. So an agent keeps your decisions, the results of its
-work and what you teach it from one session to the next.
+computer reads and writes the same personal memory. So an agent keeps your decisions, the results
+of its work and what you teach it from one session to the next. A second memory can keep the facts
+that your whole team shares.
 
 vis-optmem brings [OptMem](https://github.com/VictorTaelin/OptMem) by
 [Victor Taelin](https://github.com/VictorTaelin) to Vis as typed Python functions. It uses the same
@@ -30,6 +31,9 @@ memo.forget("0-15")                  # drop a wrong summary; memo asks for it ag
 memo.config({"WAKE_LINES": 128})     # show or change the sizes
 memo.import_memories("~/old.txt")    # add dated lines, each "YYYY-MM-DD text"
 ```
+
+Each tool takes `scope="personal"`, the default, or `scope="everyone"`. See
+[Personal and shared memory](#personal-and-shared-memory).
 
 Each result is a typed record with a `text` field. The agent prints the text and does what it says.
 A subagent does not use the memory. Its leader reads and writes it.
@@ -61,6 +65,37 @@ Each person then gets `<workspace>/memory`. An absolute path or a `~` path does 
 
 The files are the same as those of the OptMem `memo` command, so both tools can use one memory.
 A lock file keeps the writes of all sessions and processes in order. Do not edit the files by hand.
+
+## Personal and shared memory
+
+vis-optmem has two memories:
+
+- **personal**: your own memory. The tools use it when you give no `scope`.
+- **everyone**: one memory that every person on your team shares, for example team decisions and
+  project conventions.
+
+The two memories never mix. Each has its own memories and its own summaries, so a summary of the
+shared memory never contains a personal note. The agent saves to the shared memory only facts
+that every person may read, and keeps facts about you personal.
+
+The shared memory has no default place. To enable it, set one of these before you start Vis:
+
+- `MEMORY_EVERYONE_DIR`: a folder that every person reaches. A relative path is in the session
+  workspace. It must not be the personal memory folder.
+- `MEMORY_EVERYONE_STORE` and `MEMORY_EVERYONE_STORE_CONFIG`: a custom store, as in
+  [Keep the memory in another place](#keep-the-memory-in-another-place).
+
+Then create it once:
+
+```python
+memo.init(scope="everyone")
+memo.note("The team uses uv, not Poetry.", scope="everyone")
+```
+
+When you read your personal memory, the result gives the call that reads the shared memory. In a
+session, `session["memo"]["everyone"]` shows the count of shared memories, or
+`{"store": "unset"}` when no shared memory is set. In Python, use
+`Memo(everyone_directory=...)` or `Memo(everyone_store=...)`.
 
 ## Keep the memory in another place
 

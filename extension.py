@@ -2,24 +2,29 @@
 
 import blockether.vis.extension as vis
 
-from vis_optmem.memo import Memo, status
+from vis_optmem.memo import EVERYONE, Memo, status
 from vis_optmem.store import SIZES
 
 CONTENT_LIMIT = 4000
 DEFAULT_LIMIT = next(size.default for size in SIZES if size.name == "ENTRY_CHARS")
 
-PROMPT = """memo surface active: permanent memory, shared by every session that uses this memory.
-  memo.wake(part=1, at=None)   read your memory
-  memo.note(memory)            save one memory: one line of at most {limit} bytes
-  memo.nap(block, summary)     save a summary that memo asks for
-  memo.recall(pattern)         search every memory with a regex, word for word
-  memo.zoom(block)             open a summary into its two halves
-  memo.forget(block)           drop a wrong summary; memo asks for it again
+PROMPT = """memo surface active: permanent memory in two memories.
+- scope="personal", the default: your own memory, shared by your sessions.
+- scope="everyone": one memory that every person who uses it shares.
+  memo.wake(part=1, at=None, scope="personal")   read a memory
+  memo.note(memory, scope="personal")            save one memory: one line of at most {limit} bytes
+  memo.nap(block, summary, scope="personal")     save a summary that memo asks for
+  memo.recall(pattern, scope="personal")         search every memory with a regex, word for word
+  memo.zoom(block, scope="personal")             open a summary into its two halves
+  memo.forget(block, scope="personal")           drop a wrong summary; memo asks for it again
 Each result has a `text` field. Print it and do what it says. Find the other tools with apropos(r"^memo\\.").
 - Read your memory once in each session, before other work: print((await memo.wake()).text). Continue until it says "You are awake."
 - Save a memory for each new fact of lasting value: decisions, results of real work, what the user teaches you, facts about the user's life, events with lasting effect.
+- Save to scope="everyone" only facts that help every person and that every person may read: team decisions, project conventions, shared results. Keep facts about the user, preferences and private data personal.
+- Never save passwords, keys or other secrets in either memory.
 - Do not save a memory that you already have.
-- When a result asks for a summary, save it with memo.nap() before your next action. session["memo"]["summaries_due"] counts the summaries that are due.
+- When a result asks for a summary, save it with the call in its text, before your next action. The call names the memory. session["memo"]["personal"]["summaries_due"] and session["memo"]["everyone"]["summaries_due"] count the summaries that are due.
+- If session["memo"]["everyone"]["store"] is "unset", there is no memory for everyone. Do not use scope="everyone".
 - If session["agent"]["role"] is "subagent", do not use memo.
 - Do not change the memory files yourself. memo owns them."""
 
@@ -45,6 +50,8 @@ def _render(label, build):
             )
         if phase == "success" and result is not None:
             summary, body = build(result)
+            if getattr(result, "scope", None) == EVERYONE:
+                summary += " · everyone"
             content = (vis.ActivityText(_clip(body)),) if body else ()
             return vis.ActivityPresentation(label, summary, content)
         return None
@@ -162,21 +169,34 @@ def _prompt(env):
 
 
 def _ctx(env):
-    return {"memo": status(base=_workspace(env))}
+    base = _workspace(env)
+    return {
+        "memo": {
+            "personal": status(base=base),
+            "everyone": status(base=base, scope=EVERYONE),
+        }
+    }
 
 
 vis.register_extension(
     vis.Extension(
         name="vis-optmem",
         description=(
-            "Permanent memory for agents, shared by every session on this machine. "
-            "Based on OptMem by Victor Taelin."
+            "Permanent memory for agents: a personal memory for every session on this "
+            "machine, and a memory that everyone shares. Based on OptMem by Victor Taelin."
         ),
         version="0.2.0",
         alias="memo",
         symbols=[vis.Symbol(Memo(base=vis.workspace_root), name="memo")],
         prompt=_prompt,
         ctx=_ctx,
-        env=["MEMORY_DIR", "MEMORY_STORE", "MEMORY_STORE_CONFIG"],
+        env=[
+            "MEMORY_DIR",
+            "MEMORY_STORE",
+            "MEMORY_STORE_CONFIG",
+            "MEMORY_EVERYONE_DIR",
+            "MEMORY_EVERYONE_STORE",
+            "MEMORY_EVERYONE_STORE_CONFIG",
+        ],
     )
 )

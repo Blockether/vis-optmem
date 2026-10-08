@@ -40,6 +40,24 @@ RAW_BLOCK_LIMIT = 16
 Larger blocks are summarized from the summaries of their two halves.
 """
 
+PERSONAL = "personal"
+"""The memory of one person: ``MEMORY_DIR`` or ``MEMORY_STORE``. Tools use it by default."""
+
+EVERYONE = "everyone"
+"""The memory that every person shares: ``MEMORY_EVERYONE_DIR`` or ``MEMORY_EVERYONE_STORE``."""
+
+SCOPES = (PERSONAL, EVERYONE)
+
+VARIABLES = {
+    PERSONAL: ("MEMORY_DIR", "MEMORY_STORE", "MEMORY_STORE_CONFIG"),
+    EVERYONE: (
+        "MEMORY_EVERYONE_DIR",
+        "MEMORY_EVERYONE_STORE",
+        "MEMORY_EVERYONE_STORE_CONFIG",
+    ),
+}
+"""The environment variables that choose each memory: folder, custom store, store config."""
+
 STORE_GROUP = "vis_optmem.stores"
 """Entry point group of named stores: ``MEMORY_STORE=<name>`` selects one."""
 
@@ -57,6 +75,26 @@ def _plural(count: int, one: str, many: str) -> str:
 
 def _block_name(lo: int, hi: int) -> str:
     return f"{lo}-{hi - 1}"
+
+
+def check_scope(scope: str) -> str:
+    """Return ``scope`` if it names a memory, or raise ValueError."""
+    if scope not in SCOPES:
+        raise ValueError(
+            f"scope={scope!r} is not a memory. Use {PERSONAL!r} or {EVERYONE!r}."
+        )
+    return scope
+
+
+def _call(method: str, *args: str, scope: str = PERSONAL) -> str:
+    """A tool call for a next step. It names the memory when it is not personal."""
+    if scope != PERSONAL:
+        args = (*args, f'scope="{scope}"')
+    return f"{NAMESPACE}.{method}({', '.join(args)})"
+
+
+class MemoryNotSet(LookupError):
+    """No folder and no store is set for the memory of everyone."""
 
 
 def parse_block(block: str) -> tuple[int, int]:
@@ -151,6 +189,7 @@ class Wake:
         SummaryRequest | None,
         "A summary that is due. When lines is empty, wake needs it first.",
     ]
+    scope: Annotated[str, "The memory: personal or everyone."] = PERSONAL
 
 
 @dataclass(frozen=True, slots=True)
@@ -162,6 +201,7 @@ class Saved:
     date: Annotated[str, "Date of the new memory, as YYYY-MM-DD."]
     memory: Annotated[str, "The saved memory, without outer whitespace."]
     request: Annotated[SummaryRequest | None, "A summary that is due now."]
+    scope: Annotated[str, "The memory: personal or everyone."] = PERSONAL
 
 
 @dataclass(frozen=True, slots=True)
@@ -172,6 +212,7 @@ class Nap:
     saved: Annotated[str | None, "Block whose summary this call saved, or None."]
     summary: Annotated[str | None, "The saved summary, or None."]
     request: Annotated[SummaryRequest | None, "The next summary that is due, or None."]
+    scope: Annotated[str, "The memory: personal or everyone."] = PERSONAL
 
 
 @dataclass(frozen=True, slots=True)
@@ -185,6 +226,7 @@ class Recall:
         "The newest matching memories that fit one print, oldest first.",
     ]
     total: Annotated[int, "Number of all matching memories."]
+    scope: Annotated[str, "The memory: personal or everyone."] = PERSONAL
 
 
 @dataclass(frozen=True, slots=True)
@@ -197,6 +239,7 @@ class Zoom:
         tuple[str, ...],
         "A summary, or a memory when a half holds one. A half after the newest memory is absent.",
     ]
+    scope: Annotated[str, "The memory: personal or everyone."] = PERSONAL
 
 
 @dataclass(frozen=True, slots=True)
@@ -205,6 +248,7 @@ class Forgot:
 
     text: Annotated[str, "What to read: the result and the next step."]
     blocks: Annotated[tuple[str, ...], "Dropped blocks, smallest first."]
+    scope: Annotated[str, "The memory: personal or everyone."] = PERSONAL
 
 
 @dataclass(frozen=True, slots=True)
@@ -224,6 +268,7 @@ class Sizes:
     text: Annotated[str, "What to read: one size on each line."]
     sizes: Annotated[tuple[SizeValue, ...], "Every size."]
     changed: Annotated[tuple[str, ...], "Names that this call changed."]
+    scope: Annotated[str, "The memory: personal or everyone."] = PERSONAL
 
 
 @dataclass(frozen=True, slots=True)
@@ -236,6 +281,7 @@ class StoreInfo:
     ]
     memories: Annotated[int, "Number of memories."]
     is_new: Annotated[bool, "True when this call created the folder."]
+    scope: Annotated[str, "The memory: personal or everyone."] = PERSONAL
 
 
 @dataclass(frozen=True, slots=True)
@@ -246,6 +292,7 @@ class Imported:
     first: Annotated[int, "Id of the first imported memory."]
     last: Annotated[int, "Id of the last imported memory."]
     due: Annotated[int, "Number of summaries that are due."]
+    scope: Annotated[str, "The memory: personal or everyone."] = PERSONAL
 
 
 Base = Callable[[], str | os.PathLike[str]]
@@ -253,7 +300,9 @@ Base = Callable[[], str | os.PathLike[str]]
 _loaded: dict[tuple[str, str, str], MemoryStore] = {}
 
 
-def _factory(reference: str, base: Base | None) -> Callable[..., MemoryStore]:
+def _factory(
+    reference: str, base: Base | None, variable: str
+) -> Callable[..., MemoryStore]:
     if ":" not in reference:
         found = metadata.entry_points(group=STORE_GROUP, name=reference)
         if not found:
@@ -262,7 +311,7 @@ def _factory(reference: str, base: Base | None) -> Callable[..., MemoryStore]:
             )
             known = f" Installed stores: {', '.join(names)}." if names else ""
             raise ValueError(
-                f"MEMORY_STORE={reference} names no installed store.{known} "
+                f"{variable}={reference} names no installed store.{known} "
                 "Use module:factory, path/to/store.py:factory or an installed store name."
             )
         return next(iter(found)).load()
@@ -276,7 +325,7 @@ def _factory(reference: str, base: Base | None) -> Callable[..., MemoryStore]:
             f"vis_optmem_store_{abs(hash(path))}", path
         )
         if spec is None or spec.loader is None or not os.path.isfile(path):
-            raise ValueError(f"MEMORY_STORE: no Python file at {pretty(Path(path))}.")
+            raise ValueError(f"{variable}: no Python file at {pretty(Path(path))}.")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
     else:
@@ -284,7 +333,7 @@ def _factory(reference: str, base: Base | None) -> Callable[..., MemoryStore]:
     try:
         return getattr(module, name)
     except AttributeError:
-        raise ValueError(f"MEMORY_STORE: {source} has no {name}.") from None
+        raise ValueError(f"{variable}: {source} has no {name}.") from None
 
 
 def load_store(
@@ -292,48 +341,59 @@ def load_store(
     config: Mapping[str, object] | None = None,
     *,
     base: Base | None = None,
+    variable: str = "MEMORY_STORE",
 ) -> MemoryStore:
     """Build a custom store and keep it for the next calls.
 
     ``reference`` is ``module:factory``, ``path/to/store.py:factory`` or the name of an
     entry point in the ``vis_optmem.stores`` group. A relative file path starts at
     ``base``. The factory is a ``MemoryStore`` subclass or a function that returns a
-    store; ``config`` gives its keyword arguments.
+    store; ``config`` gives its keyword arguments. Errors name ``variable``.
     """
     options = dict(config or {})
     where = os.fspath(base()) if base is not None else ""
     key = (reference, json.dumps(options, sort_keys=True, default=str), where)
     if key not in _loaded:
-        store = _factory(reference, base)(**options)
+        store = _factory(reference, base, variable)(**options)
         if not isinstance(store, MemoryStore):
             raise TypeError(
-                f"MEMORY_STORE={reference} made a {type(store).__name__}, not a MemoryStore."
+                f"{variable}={reference} made a {type(store).__name__}, not a MemoryStore."
             )
         _loaded[key] = store
     return _loaded[key]
 
 
-def _store_config() -> dict[str, object]:
-    raw = os.environ.get("MEMORY_STORE_CONFIG", "").strip()
+def _store_config(variable: str = "MEMORY_STORE_CONFIG") -> dict[str, object]:
+    raw = os.environ.get(variable, "").strip()
     if not raw:
         return {}
     try:
         config = json.loads(raw)
     except json.JSONDecodeError as error:
-        raise ValueError(f"MEMORY_STORE_CONFIG is not valid JSON: {error}.") from None
+        raise ValueError(f"{variable} is not valid JSON: {error}.") from None
     if not isinstance(config, dict):
-        raise ValueError("MEMORY_STORE_CONFIG must be a JSON object.")
+        raise ValueError(f"{variable} must be a JSON object.")
     return config
 
 
 class Memo:
-    """Permanent memory in the OptMem format, shared by every session on this machine.
+    """Permanent memory in the OptMem format, in two memories: personal and everyone.
 
-    The memory is ``store`` when you give one: a ``MemoryStore``, or a function that
-    returns one for each call. Else ``$MEMORY_STORE`` selects a custom store (see
-    ``load_store``) with the JSON object in ``$MEMORY_STORE_CONFIG`` as its arguments.
-    Else the memory is the OptMem folder ``directory``, else ``$MEMORY_DIR``, else
-    ``~/.optmem/memory``: the same folder that the ``memo`` tool uses.
+    Each tool takes ``scope``. ``"personal"``, the default, is the memory of one
+    person. ``"everyone"`` is a second memory that every person who reaches its
+    folder or store shares. The two memories never mix: each has its own memories
+    and summaries.
+
+    The personal memory is ``store`` when you give one: a ``MemoryStore``, or a
+    function that returns one for each call. Else ``$MEMORY_STORE`` selects a custom
+    store (see ``load_store``) with the JSON object in ``$MEMORY_STORE_CONFIG`` as its
+    arguments. Else the memory is the OptMem folder ``directory``, else
+    ``$MEMORY_DIR``, else ``~/.optmem/memory``: the same folder that the ``memo``
+    tool uses.
+
+    The memory of everyone has no default place. ``everyone_store``,
+    ``$MEMORY_EVERYONE_STORE`` with ``$MEMORY_EVERYONE_STORE_CONFIG``,
+    ``everyone_directory`` and ``$MEMORY_EVERYONE_DIR`` choose it in the same order.
 
     ``base`` returns the folder for a relative path. Vis passes the session
     workspace, so ``MEMORY_DIR=memory`` is ``<workspace>/memory``. An absolute or
@@ -347,43 +407,87 @@ class Memo:
         *,
         base: Base | None = None,
         store: MemoryStore | Callable[[], MemoryStore] | None = None,
+        everyone_directory: str | os.PathLike[str] | None = None,
+        everyone_store: MemoryStore | Callable[[], MemoryStore] | None = None,
     ) -> None:
-        self._directory = directory
+        self._directory = {PERSONAL: directory, EVERYONE: everyone_directory}
         self._base = base
-        self._custom = store
+        self._custom = {PERSONAL: store, EVERYONE: everyone_store}
 
-    def _path(self) -> Path:
-        chosen = os.path.expanduser(
-            os.fspath(
-                self._directory or os.environ.get("MEMORY_DIR") or DEFAULT_DIRECTORY
-            )
-        )
+    def _path(self, scope: str = PERSONAL) -> Path | None:
+        folder, _, _ = VARIABLES[scope]
+        default = DEFAULT_DIRECTORY if scope == PERSONAL else None
+        chosen = self._directory[scope] or os.environ.get(folder) or default
+        if not chosen:
+            return None
+        chosen = os.path.expanduser(os.fspath(chosen))
         if not os.path.isabs(chosen) and self._base is not None:
             chosen = os.path.join(os.fspath(self._base()), chosen)
         return Path(os.path.abspath(chosen))
 
-    def _store(self) -> MemoryStore:
-        if isinstance(self._custom, MemoryStore):
-            return self._custom
-        if self._custom is not None:
-            return self._custom()
-        reference = os.environ.get("MEMORY_STORE", "").strip()
-        if reference and self._directory is None:
-            return load_store(reference, _store_config(), base=self._base)
-        return FileStore(self._path())
+    def _reference(self, scope: str) -> str:
+        """The custom store in the environment, or "" when a folder or object wins."""
+        if self._custom[scope] is not None or self._directory[scope] is not None:
+            return ""
+        return os.environ.get(VARIABLES[scope][1], "").strip()
 
-    def _open(self) -> tuple[MemoryStore, dict[str, int]]:
-        store = self._store()
+    def _is_set(self, scope: str = EVERYONE) -> bool:
+        """True when the memory has a place: always for personal, by setting for everyone."""
+        check_scope(scope)
+        return bool(
+            self._custom[scope] is not None
+            or self._reference(scope)
+            or self._path(scope) is not None
+        )
+
+    def _store(self, scope: str = PERSONAL) -> MemoryStore:
+        check_scope(scope)
+        custom = self._custom[scope]
+        if isinstance(custom, MemoryStore):
+            return custom
+        if custom is not None:
+            return custom()
+        folder, variable, config = VARIABLES[scope]
+        reference = self._reference(scope)
+        if reference:
+            return load_store(
+                reference, _store_config(config), base=self._base, variable=variable
+            )
+        path = self._path(scope)
+        if path is None:
+            raise MemoryNotSet(
+                "No memory for everyone is set. Set MEMORY_EVERYONE_DIR to a folder that "
+                "every person reaches, or MEMORY_EVERYONE_STORE to a shared store."
+            )
+        if (
+            scope == EVERYONE
+            and self._custom[PERSONAL] is None
+            and not self._reference(PERSONAL)
+            and path == self._path(PERSONAL)
+        ):
+            raise ValueError(
+                f"{folder} is the personal memory folder {pretty(path)}. "
+                "Give the memory for everyone its own folder."
+            )
+        return FileStore(path)
+
+    def _open(self, scope: str = PERSONAL) -> tuple[MemoryStore, dict[str, int]]:
+        store = self._store(scope)
         if not store.exists():
+            folder, variable, _ = VARIABLES[scope]
             raise FileNotFoundError(
-                f"No memory at {store.location}. To create it, call {NAMESPACE}.init(). "
-                "To use another memory, set MEMORY_DIR or MEMORY_STORE."
+                f"No memory at {store.location}. To create it, call {_call('init', scope=scope)}. "
+                f"To use another memory, set {folder} or {variable}."
             )
         store.prepare()
         return store, store.sizes()
 
     def _request(
-        self, store: MemoryStore, sizes: dict[str, int], total: int
+        self,
+        store: MemoryStore,
+        sizes: dict[str, int],
+        total: int,
+        scope: str = PERSONAL,
     ) -> SummaryRequest | None:
         due = store.due(total, limit=1)
         if not due:
@@ -415,28 +519,39 @@ class Memo:
         if remaining:
             more = _plural(remaining, "more summary is", "more summaries are")
             lines.append(f"{more} due after this one.")
-        lines.append(f'Next: await {NAMESPACE}.nap("{block}", "<your line>")')
+        save = _call("nap", f'"{block}"', '"<your line>"', scope=scope)
+        lines.append(f"Next: await {save}")
         return SummaryRequest(block, sources, limit, remaining, "\n".join(lines))
 
-    def init(self) -> StoreInfo:
+    def _awake(self, scope: str) -> str:
+        """The last line of a complete read: the memory for everyone comes next when set."""
+        if scope == PERSONAL and self._is_set(EVERYONE):
+            return f"Next, read the memory for everyone: await {_call('wake', scope=EVERYONE)}"
+        return "You are awake."
+
+    def init(self, scope: str = PERSONAL) -> StoreInfo:
         """Create the memory folder when it does not exist. Calling it again changes nothing.
 
         A new folder is a new memory. So wake and note never create one: a wrong
         MEMORY_DIR stops them instead of starting an empty memory.
         """
-        store = self._store()
+        store = self._store(scope)
         is_new = store.create()
         store.sizes()
         count = store.count()
         place = store.location
         if is_new:
-            text = f"Created {place}: one memory for every session on this machine."
+            text = f"Created {place}: " + (
+                "one memory for every session on this machine."
+                if scope == PERSONAL
+                else "one memory for everyone who reaches it."
+            )
         else:
             text = f"Found {place}: {_plural(count, 'memory', 'memories')}."
         path = str(store.directory) if isinstance(store, FileStore) else place
-        return StoreInfo(text, path, count, is_new)
+        return StoreInfo(text, path, count, is_new, scope)
 
-    def wake(self, part: int = 1, at: int | None = None) -> Wake:
+    def wake(self, part: int = 1, at: int | None = None, scope: str = PERSONAL) -> Wake:
         """Read your memory: recent memories in full, older ones as summaries.
 
         Read it at the start of each session. A large memory comes in parts that
@@ -444,9 +559,10 @@ class Memo:
         ``at`` keeps the memory count of the first part, so notes from other
         sessions cannot move the part boundaries. Without ``at``, wake reads all
         current memories. When a summary that the read needs is not written yet,
-        the result has no lines and asks for that summary first.
+        the result has no lines and asks for that summary first. A complete read
+        of the personal memory gives the call that reads the memory for everyone.
         """
-        store, sizes = self._open()
+        store, sizes = self._open(scope)
         now = store.count()
         if part < 1:
             raise ValueError("part starts at 1.")
@@ -454,14 +570,12 @@ class Memo:
         if not 0 <= total <= now:
             raise ValueError(
                 f"at={at}, but the memory holds {_plural(now, 'memory', 'memories')}. "
-                f"Call {NAMESPACE}.wake() without at."
+                f"Call {_call('wake', scope=scope)} without at."
             )
         if total == 0:
-            text = (
-                f'No memories yet. Save the first one with {NAMESPACE}.note("<one line>").\n'
-                "You are awake."
-            )
-            return Wake(text, (), 1, 1, 0, True, None)
+            first = _call("note", '"<one line>"', scope=scope)
+            text = f"No memories yet. Save the first one with {first}.\n{self._awake(scope)}"
+            return Wake(text, (), 1, 1, 0, True, None, scope)
         lines = []
         for lo, hi in cover(total, sizes["WAKE_LINES"]):
             if hi - lo == 1:
@@ -469,15 +583,15 @@ class Memo:
                 continue
             summary = store.summary(lo, hi)
             if summary is None:
-                request = self._request(store, sizes, total)
+                request = self._request(store, sizes, total, scope)
                 if request is not None:
                     due = _plural(request.remaining + 1, "summary", "summaries")
                     text = (
                         f"Cannot read the memory yet: it needs the summary of #{_block_name(lo, hi)}, "
                         f"which is not written.\nWrite the {due} that are due, one at a time. "
-                        f"Then call {NAMESPACE}.wake() again.\n\n{request.text}"
+                        f"Then call {_call('wake', scope=scope)} again.\n\n{request.text}"
                     )
-                    return Wake(text, (), part, 0, total, False, request)
+                    return Wake(text, (), part, 0, total, False, request, scope)
                 # Another session can write the summary in the meantime.
                 summary = store.summary(lo, hi)
                 if summary is None:
@@ -489,7 +603,7 @@ class Memo:
         if part > len(parts):
             raise ValueError(
                 f"No part {part}: the memory has {_plural(len(parts), 'part', 'parts')}. "
-                f"Call {NAMESPACE}.wake()."
+                f"Call {_call('wake', scope=scope)}."
             )
         shown = parts[part - 1]
         out = []
@@ -502,36 +616,52 @@ class Memo:
         is_awake = part == len(parts)
         request = None
         if is_awake:
-            out.append("You are awake.")
-            request = self._request(store, sizes, total)
+            out.append(self._awake(scope))
+            request = self._request(store, sizes, total, scope)
             if request is not None:
                 out += ["", request.text]
         else:
             out.append(
-                f"Not awake yet. Next: await {NAMESPACE}.wake(part={part + 1}, at={total})"
+                f"Not awake yet. Next: await "
+                f"{_call('wake', f'part={part + 1}', f'at={total}', scope=scope)}"
             )
         return Wake(
-            "\n".join(out), tuple(shown), part, len(parts), total, is_awake, request
+            "\n".join(out),
+            tuple(shown),
+            part,
+            len(parts),
+            total,
+            is_awake,
+            request,
+            scope,
         )
 
-    def note(self, memory: str) -> Saved:
+    def note(self, memory: str, scope: str = PERSONAL) -> Saved:
         """Save one memory: one line of at most ENTRY_CHARS bytes (280 by default).
 
         The memory gets the next id and the date of today. The log only grows:
         nothing can change or remove a saved memory. The result can ask for a
-        summary. Write it before your next action.
+        summary. Write it before your next action. Save to ``scope="everyone"``
+        only what every person may read.
         """
-        store, sizes = self._open()
+        store, sizes = self._open(scope)
         line = check_line(memory, sizes["ENTRY_CHARS"], what="memory")
         date = datetime.date.today().isoformat()
         number = store.append([(date, line)])
-        request = self._request(store, sizes, number + 1)
-        text = f"Saved as #{number}."
+        request = self._request(store, sizes, number + 1, scope)
+        text = f"Saved as #{number}" + (
+            "." if scope == PERSONAL else " in the memory for everyone."
+        )
         if request is not None:
             text += "\n\n" + request.text
-        return Saved(text, number, date, line, request)
+        return Saved(text, number, date, line, request, scope)
 
-    def nap(self, block: str | None = None, summary: str | None = None) -> Nap:
+    def nap(
+        self,
+        block: str | None = None,
+        summary: str | None = None,
+        scope: str = PERSONAL,
+    ) -> Nap:
         """Save a summary that the memory asked for, and get the next one.
 
         Without arguments, return the next summary that is due. Summaries are
@@ -540,7 +670,7 @@ class Memo:
         """
         if (block is None) != (summary is None):
             raise ValueError("Give both block and summary, or neither.")
-        store, sizes = self._open()
+        store, sizes = self._open(scope)
         total = store.count()
         notes = []
         saved = None
@@ -550,12 +680,13 @@ class Memo:
             name = _block_name(lo, hi)
             due = store.due(total, limit=1)
             if not due:
-                return Nap("Nothing left to summarize.", None, None, None)
+                return Nap("Nothing left to summarize.", None, None, None, scope)
             if (lo, hi) != due[0]:
                 if store.summary(lo, hi) is None:
                     raise ValueError(
                         f"Wrong block: {block}. Summaries are written in order, and the "
-                        f"next is {_block_name(*due[0])}. Call {NAMESPACE}.nap() to see it."
+                        f"next is {_block_name(*due[0])}. "
+                        f"Call {_call('nap', scope=scope)} to see it."
                     )
                 notes.append(f"#{name} is already saved.")
             else:
@@ -567,21 +698,21 @@ class Memo:
                     notes.append(
                         f"#{name} changed meanwhile: another session saved or dropped it."
                     )
-        request = self._request(store, sizes, total)
+        request = self._request(store, sizes, total, scope)
         if request is None:
             notes.append("Nothing left to summarize.")
-            return Nap("\n".join(notes), saved, saved_summary, None)
+            return Nap("\n".join(notes), saved, saved_summary, None, scope)
         text = "\n\n".join(["\n".join(notes), request.text]) if notes else request.text
-        return Nap(text, saved, saved_summary, request)
+        return Nap(text, saved, saved_summary, request, scope)
 
-    def recall(self, pattern: str) -> Recall:
+    def recall(self, pattern: str, scope: str = PERSONAL) -> Recall:
         """Search every memory with a regular expression, without case.
 
         The search reads the raw memories, not the summaries. It matches the
         whole line, so it can also find an id or a date. When the matches do not
         fit one print, the result keeps the newest ones and gives the total.
         """
-        store, sizes = self._open()
+        store, sizes = self._open(scope)
         try:
             regex = re.compile(pattern, re.IGNORECASE)
         except re.error as error:
@@ -599,21 +730,21 @@ class Memo:
             while used > limit:
                 used -= len(kept.popleft().encode("utf-8")) + 1
         if not total:
-            return Recall("No match.", pattern, (), 0)
+            return Recall("No match.", pattern, (), 0, scope)
         count = _plural(total, "match", "matches")
         if len(kept) < total:
             tail = f"Newest {len(kept)} of {count}. Use a narrower pattern."
         else:
             tail = f"{count}."
-        return Recall("\n".join([*kept, tail]), pattern, tuple(kept), total)
+        return Recall("\n".join([*kept, tail]), pattern, tuple(kept), total, scope)
 
-    def zoom(self, block: str) -> Zoom:
+    def zoom(self, block: str, scope: str = PERSONAL) -> Zoom:
         """Open a block of the memory into its two halves.
 
         Each half is a summary, or a memory when it holds one memory. Zoom again
         into a half to go down to single memories.
         """
-        store, _ = self._open()
+        store, _ = self._open(scope)
         lo, hi = parse_block(block)
         total = store.count()
         if lo >= total:
@@ -631,15 +762,15 @@ class Memo:
             else:
                 summary = store.summary(start, end) or "(no summary yet)"
                 halves.append(f"#{_block_name(start, end)} {summary}")
-        return Zoom("\n".join(halves), _block_name(lo, hi), tuple(halves))
+        return Zoom("\n".join(halves), _block_name(lo, hi), tuple(halves), scope)
 
-    def forget(self, block: str) -> Forgot:
+    def forget(self, block: str, scope: str = PERSONAL) -> Forgot:
         """Drop a wrong summary and every summary that depends on it.
 
         Later summaries of the same sizes go too. The memories do not change,
         so memo.nap() asks for the dropped summaries again.
         """
-        store, _ = self._open()
+        store, _ = self._open(scope)
         lo, hi = parse_block(block)
         dropped = store.drop_summaries(lo, hi)
         if not dropped:
@@ -649,17 +780,21 @@ class Memo:
         again = "it" if len(names) == 1 else "them"
         text = (
             f"Dropped {count}, from #{names[0]} up. "
-            f"Call {NAMESPACE}.nap() to write {again} again."
+            f"Call {_call('nap', scope=scope)} to write {again} again."
         )
-        return Forgot(text, names)
+        return Forgot(text, names, scope)
 
-    def config(self, changes: Mapping[str, int | None] | None = None) -> Sizes:
+    def config(
+        self,
+        changes: Mapping[str, int | None] | None = None,
+        scope: str = PERSONAL,
+    ) -> Sizes:
         """Show the sizes of the memory, or change them.
 
         ``changes`` maps size names to new values. None restores the default.
         Sizes only choose what is shown, so a change rewrites no memory.
         """
-        store, _ = self._open()
+        store, _ = self._open(scope)
         overrides = store.overrides()
         changed = []
         for name, value in (changes or {}).items():
@@ -689,16 +824,16 @@ class Memo:
             + (f" (default {value.default})" if value.name in overrides else "")
             for value in values
         )
-        return Sizes(text, values, tuple(changed))
+        return Sizes(text, values, tuple(changed), scope)
 
-    def import_memories(self, path: str) -> Imported:
+    def import_memories(self, path: str, scope: str = PERSONAL) -> Imported:
         """Add dated memories from a UTF-8 file, to start a memory from older records.
 
         Each line is ``YYYY-MM-DD text``. Dates must not go back in time, also not
         before the newest memory. Empty lines are skipped. If one line is wrong,
         nothing is added.
         """
-        store, sizes = self._open()
+        store, sizes = self._open(scope)
         source = Path(os.path.expanduser(path))
         try:
             lines = source.read_text(encoding="utf-8").split("\n")
@@ -744,9 +879,9 @@ class Memo:
             again = "it" if due == 1 else "them"
             text += (
                 f"\n{_plural(due, 'summary is', 'summaries are')} due. "
-                f"Call {NAMESPACE}.nap() to write {again}."
+                f"Call {_call('nap', scope=scope)} to write {again}."
             )
-        return Imported(text, first, final, due)
+        return Imported(text, first, final, due, scope)
 
 
 def status(
@@ -754,14 +889,24 @@ def status(
     *,
     base: Base | None = None,
     store: MemoryStore | Callable[[], MemoryStore] | None = None,
+    scope: str = PERSONAL,
 ) -> dict[str, object]:
     """Facts for the session context: memory count, summaries due and the memory size limit.
 
-    ``base`` and ``store`` choose the memory, as in ``Memo``. It reports a problem as a
-    fact and never raises, so a bad folder or an unreachable store cannot stop a session.
+    ``directory``, ``base`` and ``store`` choose the memory of ``scope``, as in ``Memo``.
+    A memory for everyone without a place is ``{"store": "unset"}``. It reports a
+    problem as a fact and never raises, so a bad folder or an unreachable store cannot
+    stop a session.
     """
     try:
-        chosen = Memo(directory, base=base, store=store)._store()
+        check_scope(scope)
+        if scope == PERSONAL:
+            memo = Memo(directory, base=base, store=store)
+        else:
+            memo = Memo(base=base, everyone_directory=directory, everyone_store=store)
+        chosen = memo._store(scope)
+    except MemoryNotSet:
+        return {"store": "unset"}
     except Exception as error:
         return {"store": "unavailable", "error": str(error)}
     try:

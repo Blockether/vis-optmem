@@ -2,7 +2,15 @@
 
 import pytest
 
-from vis_optmem.memo import Memo
+from vis_optmem.memo import VARIABLES, Memo
+
+
+@pytest.fixture(autouse=True)
+def no_memory_settings(monkeypatch):
+    """Keep the memory settings of the process out of every test."""
+    for names in VARIABLES.values():
+        for name in names:
+            monkeypatch.delenv(name, raising=False)
 
 
 @pytest.fixture
