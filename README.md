@@ -66,11 +66,10 @@ tool on. In Python, `Memo(disabled=["init"])` replaces the setting.
 - `memo.zoom()` opens a summary when the agent needs its detail. `memo.recall()` searches the
   original memories.
 - `memo.note()` refuses a fact that the memory already holds, because a saved memory never
-  changes and `memo.forget()` drops only summaries. A note is a repeat when it has the same numbers
-  as a memory and shares at least 60% of its words. The result shows that memory. To save a
-  different fact that looks similar, give `force=True`. The check compares the closest memories
-  from the store's `search`, so a store that searches by meaning also finds repeats in other words
-  when they share enough words.
+  changes and `memo.forget()` drops only summaries. The store's `duplicate(text)` decides what a
+  repeat is. By default, a note is a repeat when it has the same numbers as one of the closest
+  memories from `search` and shares at least 60% of its words. The result shows that memory. To
+  save a different fact that looks similar, give `force=True`.
 
 ## Where the memory is
 
@@ -147,6 +146,7 @@ instead of a folder. Write a store for that place, then select it with two setti
    | `drop_summaries(lo, hi)`                     | Remove a summary and the summaries after it     |
    | `overrides()`, `write_overrides(overrides)`  | Read and write the sizes                        |
    | `search(query, limit)`, optional             | Find related memories for `memo.recall(about=)` |
+   | `duplicate(text)`, optional                  | Find the memory that a new note repeats         |
 
    Make each write atomic, because many sessions write at the same time. The docstrings of
    `MemoryStore` give the exact contract.
@@ -203,6 +203,19 @@ the same, so "migrate" finds "migrations". It does not know synonyms or other la
 For a real search by meaning, override `search(query, limit)` in your store. For example, an
 HTTP service on AWS can keep an embedding of each memory and return the nearest ones. The agent
 calls the same `memo.recall(about=...)` in both cases.
+
+The default repeat check of `memo.note()` compares words, so it misses the same fact in other
+words. To catch those repeats, also override `duplicate(text)`. Return the memory that already
+says the fact, or `None` to save the note:
+
+```python
+class ServiceStore(MemoryStore):
+    def duplicate(self, text: str) -> Entry | None:
+        nearest = self.client.nearest(text, limit=1)  # your embedding service
+        if nearest and nearest[0].score >= 0.92:
+            return nearest[0].entry
+        return None
+```
 
 ## Sizes
 

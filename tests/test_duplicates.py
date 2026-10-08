@@ -35,14 +35,53 @@ def test_each_memory_checks_only_its_own_notes(folder, tmp_path):
 
 
 class NearStore(FileStore):
-    """A store whose search finds nothing: the check then saves the note."""
+    """A store whose search finds nothing: the default check then saves the note."""
 
     def search(self, query, limit):
         return []
 
 
-def test_the_check_compares_only_what_the_store_search_finds(folder):
+def test_the_default_check_compares_only_what_the_store_search_finds(folder):
     tool = Memo(store=NearStore(folder))
     tool.init()
     tool.note("Use uv for Python projects.")
     assert tool.note("Use uv for Python projects.").id == 1
+
+
+def test_the_default_check_gives_the_memory_that_says_it(folder):
+    store = FileStore(folder)
+    tool = Memo(store=store)
+    tool.init()
+    tool.note("Use uv, not Poetry, for Python projects.")
+    assert store.duplicate("For Python projects use uv instead of Poetry.").id == 0
+    assert store.duplicate("Postgres listens on port 5432.") is None
+
+
+class MeaningStore(FileStore):
+    """A store that decides repeats itself, like a service that compares embeddings."""
+
+    def __init__(self, directory):
+        super().__init__(directory)
+        self.checked = []
+
+    def duplicate(self, text):
+        self.checked.append(text)
+        if "package manager" in text:
+            return next(iter(self.entries(0, 1)))
+        return None
+
+
+def test_a_store_decides_what_a_repeat_is(folder):
+    store = MeaningStore(folder)
+    tool = Memo(store=store)
+    tool.init()
+    tool.note("Use uv, not Poetry, for Python projects.")
+    with pytest.raises(DuplicateMemory, match=r"#0 .*Use uv, not Poetry"):
+        tool.note("The Python package manager here is uv.")
+    assert tool.note("Use uv, not Poetry, for Python projects.").id == 1
+    assert tool.note("The package manager for Rust is cargo.", force=True).id == 2
+    assert store.checked == [
+        "Use uv, not Poetry, for Python projects.",
+        "The Python package manager here is uv.",
+        "Use uv, not Poetry, for Python projects.",
+    ]

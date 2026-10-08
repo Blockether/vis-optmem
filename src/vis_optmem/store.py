@@ -39,6 +39,12 @@ LOCK_TIMEOUT_S = 30.0
 STEM_LETTERS = 6
 """Words that share their first letters match in the default search: migrate, migrations."""
 
+DUPLICATE_SIMILARITY = 0.6
+"""Share of words that two memories have in common when one repeats the other."""
+
+DUPLICATE_CANDIDATES = 5
+"""Closest memories that the default ``duplicate`` compares with a new note."""
+
 
 @dataclass(frozen=True, slots=True)
 class Size:
@@ -90,6 +96,14 @@ def stems(text: str) -> set[str]:
         word[:STEM_LETTERS]
         for word in re.findall(r"\w+", text.lower())
         if len(word) >= 3
+    }
+
+
+def _words(text: str) -> set[str]:
+    """Every word of ``text``, lowercase. Words without digits keep their first letters."""
+    return {
+        word if any(c.isdigit() for c in word) else word[:STEM_LETTERS]
+        for word in re.findall(r"\w+", text.lower())
     }
 
 
@@ -265,8 +279,7 @@ class MemoryStore(ABC):
         ``query``, and rare words count more. Words of 3 or more letters match
         when their first 6 letters are the same. It reads every memory once.
 
-        ``memo.note`` also uses it to find a memory that a new note repeats, so
-        return the closest memories first.
+        The default ``duplicate`` also uses it, so return the closest memories first.
         """
         wanted = stems(query)
         if not wanted or limit < 1:
@@ -288,6 +301,26 @@ class MemoryStore(ABC):
             key=lambda item: (-sum(weight[s] for s in item[1]), -item[0].id)
         )
         return [entry for entry, _ in candidates[:limit]]
+
+    def duplicate(self, text: str) -> Entry | None:
+        """The memory that already says ``text``, or None. ``memo.note`` refuses a repeat.
+
+        Override it to decide repeats in your service, for example when two embeddings
+        are very close. ``force=True`` in ``memo.note`` skips this check. The default
+        compares ``text`` with the DUPLICATE_CANDIDATES closest memories from ``search``.
+        A memory repeats ``text`` when it has the same numbers and shares at least
+        DUPLICATE_SIMILARITY of the words of both. So "port 5432" and "port 6543" are
+        different facts.
+        """
+        words = _words(text)
+        numbers = {word for word in words if any(c.isdigit() for c in word)}
+        for entry in self.search(text, DUPLICATE_CANDIDATES):
+            other = _words(entry.text)
+            if {word for word in other if any(c.isdigit() for c in word)} != numbers:
+                continue
+            if len(words & other) / len(words | other) >= DUPLICATE_SIMILARITY:
+                return entry
+        return None
 
     # Summaries
 
