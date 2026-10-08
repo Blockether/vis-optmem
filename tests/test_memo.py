@@ -7,7 +7,7 @@ from conftest import fill
 
 from vis_optmem import memo as memo_module
 from vis_optmem.memo import Memo, parse_block, status
-from vis_optmem.store import TREE_RECORD, Store
+from vis_optmem.store import TREE_RECORD, FileStore
 
 
 def test_only_init_creates_a_memory(folder):
@@ -250,7 +250,7 @@ def test_recall_searches_raw_memories_without_case(memo):
 
 
 def test_recall_keeps_the_newest_matches_that_fit_one_print(memo):
-    Store(memo._path()).append(
+    FileStore(memo._path()).append(
         [("2026-01-02", f"match {index} " + "x" * 200) for index in range(100)]
     )
     found = memo.recall("match")
@@ -287,7 +287,7 @@ def test_forget_drops_a_summary_and_nap_asks_for_it_again(memo):
 def test_a_damaged_summary_tells_how_to_repair_it(memo):
     memo.config({"WAKE_LINES": 1})
     fill(memo, 2)
-    Store(memo._path()).level_path(2).write_bytes(b" " * (TREE_RECORD - 1) + b"\n")
+    FileStore(memo._path()).level_path(2).write_bytes(b" " * (TREE_RECORD - 1) + b"\n")
     with pytest.raises(RuntimeError, match=r'memo.forget\("0-1"\)'):
         memo.wake()
     memo.forget("0-1")
@@ -373,7 +373,7 @@ def test_status_reports_an_unreadable_folder_and_does_not_raise(folder, monkeypa
     def refuse(store):
         raise PermissionError(13, "Permission denied", str(store.log_path))
 
-    monkeypatch.setattr(Store, "count", refuse)
+    monkeypatch.setattr(FileStore, "count", refuse)
     facts = status(folder)
     assert facts["store"] == "unreadable"
     assert "Permission denied" in facts["error"]

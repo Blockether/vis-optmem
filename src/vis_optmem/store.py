@@ -1,14 +1,18 @@
-"""The OptMem store on disk: an append-only log and one file for each summary level.
+"""Where a memory lives: the ``MemoryStore`` interface and the OptMem files.
 
-The format is the OptMem format, so the ``memo`` command-line tool and this package
-can share one memory. Each record has a fixed width, so the position of a record is
-its identity and each lookup is one seek:
+``MemoryStore`` is the interface that ``Memo`` uses for memories, summaries and sizes.
+Implement it to keep a memory in another place, for example a database. ``FileStore``
+implements it with the OptMem files, so the ``memo`` command-line tool and this package
+can share one memory.
+
+``FileStore`` gives each record a fixed width, so the position of a record is its
+identity and each lookup is one seek:
 
 - memory ``i`` is the record at byte ``i * LOG_RECORD`` of ``LOG.txt``;
 - the summary of block ``[lo, hi)`` is the record at byte
   ``(lo // (hi - lo)) * TREE_RECORD`` of ``TREE/<hi - lo>``.
 
-Writers hold an exclusive lock on ``.lock``: the same lock that the ``memo`` tool takes.
+Its writers hold an exclusive lock on ``.lock``: the same lock that the ``memo`` tool takes.
 """
 
 from __future__ import annotations
@@ -17,6 +21,7 @@ import contextlib
 import os
 import re
 import time
+from abc import ABC, abstractmethod
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -168,7 +173,132 @@ def _unlock_windows(handle) -> None:
     msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
 
 
-class Store:
+class MemoryStore(ABC):
+    """The place where one memory lives. ``Memo`` reads and writes only through it.
+
+    A memory has three parts:
+
+    - The log: memories with dense ids from 0. A memory never changes.
+    - The summaries: one level for each block size 2, 4, 8 and so on. Level ``size`` holds
+      the summaries of blocks ``[k * size, (k + 1) * size)`` for ``k`` from 0, with no gaps.
+    - The sizes: the overrides of ``SIZES`` that ``memo.config()`` sets.
+
+    Many sessions can use one memory at the same time. So ``append``, ``put_summary``,
+    ``drop_summaries`` and ``write_overrides`` must each be atomic in the store: use a
+    transaction, a conditional write or a lock. The other methods only read.
+    """
+
+    @property
+    @abstractmethod
+    def location(self) -> str:
+        """Where the memory is, for people: a folder, a table name or a URL."""
+
+    @abstractmethod
+    def exists(self) -> bool:
+        """True when the memory exists. ``Memo`` creates a memory only in ``init()``."""
+
+    @abstractmethod
+    def create(self) -> bool:
+        """Create the memory, or complete it. Return True for a new memory."""
+
+    def prepare(self) -> None:
+        """Complete an existing memory before each use. The default does nothing."""
+
+    # Sizes
+
+    @abstractmethod
+    def overrides(self) -> dict[str, int]:
+        """The sizes that this memory sets. Check each value with ``parse_size``."""
+
+    @abstractmethod
+    def write_overrides(self, overrides: Mapping[str, int]) -> None:
+        """Replace the sizes that this memory sets."""
+
+    def sizes(self) -> dict[str, int]:
+        """Every size: the override, else the default."""
+        return {size.name: size.default for size in SIZES} | self.overrides()
+
+    # Memories
+
+    @abstractmethod
+    def count(self) -> int:
+        """The number of memories."""
+
+    @abstractmethod
+    def entries(self, lo: int, hi: int) -> list[Entry]:
+        """Memories ``lo`` to ``hi - 1``, oldest first."""
+
+    @abstractmethod
+    def append(self, items: Sequence[tuple[str, str]]) -> int:
+        """Add ``(date, text)`` memories after the newest one. Return the id of the first one.
+
+        Give the ids in the same atomic step as the write, so two sessions never get the
+        same id. Add all items or none.
+        """
+
+    def entry(self, index: int) -> Entry:
+        return self.entries(index, index + 1)[0]
+
+    def scan(self) -> Iterator[Entry]:
+        """Every memory, oldest first. The default reads 4096 memories at a time."""
+        total = self.count()
+        for lo in range(0, total, 4096):
+            yield from self.entries(lo, min(lo + 4096, total))
+
+    # Summaries
+
+    @abstractmethod
+    def level_count(self, size: int) -> int:
+        """The number of summaries of blocks of ``size`` memories."""
+
+    @abstractmethod
+    def summary(self, lo: int, hi: int) -> str | None:
+        """The summary of block ``[lo, hi)``, or None when it is not written."""
+
+    @abstractmethod
+    def put_summary(self, lo: int, hi: int, text: str) -> bool:
+        """Save the summary of ``[lo, hi)`` only if it is the next summary of its level.
+
+        The next summary of level ``size`` has ``lo == level_count(size) * size``. Check
+        and write in one atomic step. Return False and write nothing when the check fails:
+        another session changed that level first.
+        """
+
+    @abstractmethod
+    def drop_summaries(self, lo: int, hi: int) -> list[tuple[int, int]]:
+        """Remove the summary of ``[lo, hi)`` and every summary that depends on it.
+
+        For each level ``size = hi - lo, 2 * (hi - lo), ...`` up to ``count()``, keep the
+        first ``lo // size`` summaries and remove the rest. Return the removed blocks as
+        ``(lo, hi)`` pairs, smallest level first. Do it in one atomic step.
+        """
+
+    def due(self, total: int, limit: int | None = None) -> list[tuple[int, int]]:
+        """Complete blocks of the first ``total`` memories without a summary, smallest first."""
+        blocks = []
+        size = 2
+        while size <= total:
+            for k in range(self.level_count(size), total // size):
+                blocks.append((k * size, (k + 1) * size))
+                if limit is not None and len(blocks) >= limit:
+                    return blocks
+            size *= 2
+        return blocks
+
+    def due_count(self, total: int) -> int:
+        """How many blocks ``due`` lists, without a list.
+
+        A level can hold more summaries than ``total`` needs when other sessions
+        add memories, so each level counts as zero or more.
+        """
+        count, size = 0, 2
+        while size <= total:
+            count += max(0, total // size - self.level_count(size))
+            size *= 2
+        return count
+
+
+class FileStore(MemoryStore):
     """One memory folder in the OptMem format."""
 
     def __init__(self, directory: Path) -> None:
@@ -185,6 +315,10 @@ class Store:
     def level_path(self, size: int) -> Path:
         return self.directory / "TREE" / str(size)
 
+    @property
+    def location(self) -> str:
+        return pretty(self.directory)
+
     def exists(self) -> bool:
         return self.directory.is_dir()
 
@@ -199,7 +333,7 @@ class Store:
         self.directory.mkdir(parents=True, exist_ok=True)
         self.prepare()
         if not self.config_path.exists():
-            self.write_overrides({})
+            self._write_config({})
         return is_new
 
     @contextlib.contextmanager
@@ -243,11 +377,11 @@ class Store:
             found[name] = parse_size(name, value, where)
         return found
 
-    def sizes(self) -> dict[str, int]:
-        """Every size: the config file value, else the default."""
-        return {size.name: size.default for size in SIZES} | self.overrides()
-
     def write_overrides(self, overrides: Mapping[str, int]) -> None:
+        with self.locked():
+            self._write_config(overrides)
+
+    def _write_config(self, overrides: Mapping[str, int]) -> None:
         """Write the config file. A size without an override stays a comment."""
         lines = [
             "# Sizes of this memory. A line that starts with # uses the default.",
@@ -273,9 +407,6 @@ class Store:
         with open(self.log_path, "rb") as handle:
             handle.seek(lo * LOG_RECORD)
             return _entries(handle.read((hi - lo) * LOG_RECORD))
-
-    def entry(self, index: int) -> Entry:
-        return self.entries(index, index + 1)[0]
 
     def scan(self) -> Iterator[Entry]:
         """Every memory, oldest first, without holding the whole log in memory."""
@@ -352,27 +483,3 @@ class Store:
                         handle.truncate(keep * TREE_RECORD)
                 size *= 2
         return dropped
-
-    def due(self, total: int, limit: int | None = None) -> list[tuple[int, int]]:
-        """Complete blocks of the first ``total`` memories without a summary, smallest first."""
-        blocks = []
-        size = 2
-        while size <= total:
-            for k in range(self.level_count(size), total // size):
-                blocks.append((k * size, (k + 1) * size))
-                if limit is not None and len(blocks) >= limit:
-                    return blocks
-            size *= 2
-        return blocks
-
-    def due_count(self, total: int) -> int:
-        """How many blocks ``due`` lists, without a list.
-
-        A level can hold more summaries than ``total`` needs when other sessions
-        add memories, so each level counts as zero or more.
-        """
-        count, size = 0, 2
-        while size <= total:
-            count += max(0, total // size - self.level_count(size))
-            size *= 2
-        return count

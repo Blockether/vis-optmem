@@ -8,7 +8,7 @@ from vis_optmem.store import SIZES
 CONTENT_LIMIT = 4000
 DEFAULT_LIMIT = next(size.default for size in SIZES if size.name == "ENTRY_CHARS")
 
-PROMPT = """memo surface active: permanent memory, shared by every session on this machine.
+PROMPT = """memo surface active: permanent memory, shared by every session that uses this memory.
   memo.wake(part=1, at=None)   read your memory
   memo.note(memory)            save one memory: one line of at most {limit} bytes
   memo.nap(block, summary)     save a summary that memo asks for
@@ -172,11 +172,11 @@ vis.register_extension(
             "Permanent memory for agents, shared by every session on this machine. "
             "Based on OptMem by Victor Taelin."
         ),
-        version="0.1.1",
+        version="0.2.0",
         alias="memo",
         symbols=[vis.Symbol(Memo(base=vis.workspace_root), name="memo")],
         prompt=_prompt,
         ctx=_ctx,
-        env=["MEMORY_DIR"],
+        env=["MEMORY_DIR", "MEMORY_STORE", "MEMORY_STORE_CONFIG"],
     )
 )

@@ -4,7 +4,8 @@ Permanent agent memory in the OptMem format, as typed Python functions for Vis.
 
 - `src/vis_optmem/` is ordinary Python. Only `extension.py` mentions Vis.
 - Keep the files byte-compatible with the OptMem `memo` command: the log and summary records, the `config` file and the `.lock` file. Test a format change against that command.
-- Write memory files only through `Store`, under its lock.
+- Write memory files only through `FileStore`, under its lock.
+- `MemoryStore` is the public interface for other places. `Memo` uses only its methods. Keep `examples/sqlite_store.py` giving the same results as `FileStore` in `tests/test_custom_store.py`.
 - `cover.py` must choose the same blocks as OptMem for every memory count and line budget. Keep its tests.
 - Every result has a `text` field that tells the agent the next step. Keep each `text` within one Vis print.
 - Give every exported method an explicit Activity presentation with a capitalized English label. Test the success, failure and empty states.

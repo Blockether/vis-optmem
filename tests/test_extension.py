@@ -49,7 +49,11 @@ def test_registration_exports_nine_typed_methods(registered):
     version = tomllib.loads(pyproject)["project"]["version"]
     assert (registered.name, registered.alias) == ("vis-optmem", "memo")
     assert registered.version == version
-    assert tuple(registered.env) == ("MEMORY_DIR",)
+    assert tuple(registered.env) == (
+        "MEMORY_DIR",
+        "MEMORY_STORE",
+        "MEMORY_STORE_CONFIG",
+    )
     assert "Victor Taelin" in registered.description
     members = registered.symbols[0].contract["members"]
     assert {member["name"]: member["tag"] for member in members} == {
@@ -69,7 +73,11 @@ class Host:
         self.folder = folder
 
     def declare_env(self, names_json):
-        assert json.loads(names_json) == ["MEMORY_DIR"]
+        assert json.loads(names_json) == [
+            "MEMORY_DIR",
+            "MEMORY_STORE",
+            "MEMORY_STORE_CONFIG",
+        ]
         return json.dumps({"MEMORY_DIR": str(self.folder)})
 
 
@@ -84,7 +92,7 @@ def test_the_host_registration_resolves_memory_dir_and_runs_the_tools(
     assert (spec["name"], spec["alias"], spec["env"]) == (
         "vis-optmem",
         "memo",
-        ["MEMORY_DIR"],
+        ["MEMORY_DIR", "MEMORY_STORE", "MEMORY_STORE_CONFIG"],
     )
     tools = {item["name"]: item["fn"] for item in spec["symbols"][0]["methods"]}
     assert sorted(tools) == sorted(TAGS)

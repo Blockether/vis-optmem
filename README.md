@@ -62,6 +62,57 @@ Each person then gets `<workspace>/memory`. An absolute path or a `~` path does 
 The files are the same as those of the OptMem `memo` command, so both tools can use one memory.
 A lock file keeps the writes of all sessions and processes in order. Do not edit the files by hand.
 
+## Keep the memory in another place
+
+To share one memory between computers or people, keep it in a database or another service
+instead of a folder. Write a store for that place, then select it with two settings.
+
+1. Subclass `vis_optmem.MemoryStore` and implement its methods. The memory, its summaries and
+   its sizes all go through them:
+
+   | Method                                       | What it does                                    |
+   |----------------------------------------------|-------------------------------------------------|
+   | `location`                                   | Name the place for people, for example a table  |
+   | `exists()`, `create()`                       | Check for the memory, or create it              |
+   | `count()`, `entries(lo, hi)`                 | Read the memories                               |
+   | `append(items)`                              | Add memories and give their ids                 |
+   | `level_count(size)`, `summary(lo, hi)`       | Read the summaries                              |
+   | `put_summary(lo, hi, text)`                  | Save the next summary of a level                |
+   | `drop_summaries(lo, hi)`                     | Remove a summary and the summaries after it     |
+   | `overrides()`, `write_overrides(overrides)`  | Read and write the sizes                        |
+
+   Make each write atomic, because many sessions write at the same time. The docstrings of
+   `MemoryStore` give the exact contract.
+2. Set `MEMORY_STORE` to the store, and `MEMORY_STORE_CONFIG` to a JSON object. vis-optmem
+   calls the store with the keys of that object as keyword arguments.
+
+[`examples/sqlite_store.py`](examples/sqlite_store.py) is a complete store for one SQL
+database. For a database on Amazon RDS, keep its tables and transactions and change the
+connection. To use the example as it is, put it in your project and add this to `vis.yml`:
+
+```yaml
+environment:
+  MEMORY_STORE: {literal: "tools/sqlite_store.py:SqliteStore"}
+  MEMORY_STORE_CONFIG: {literal: '{"path": "~/team-memory.db"}'}
+```
+
+`MEMORY_STORE` takes one of these forms:
+
+- `path/to/store.py:Name`: a Python file. A relative path is in the session workspace.
+- `module:Name`: a module that Python can import.
+- `name`: a store that a package installs in the `vis_optmem.stores` entry point group.
+
+`Name` is a `MemoryStore` subclass or a function that returns a store. vis-optmem runs this
+code in your Vis session, so select only code that you trust. If the store cannot load or
+connect, the session shows the error in `session["memo"]`, and the memo tools explain it.
+
+The store runs in the Python environment of vis-optmem. That environment has the standard
+library and the packages that vis-optmem declares, not the shared Vis packages. So write the
+store with the standard library: `sqlite3` for a local file, or `urllib.request` for an HTTP
+service, for example an API in front of your database.
+
+In Python, give the store directly: `Memo(store=MyStore(...))`.
+
 ## Sizes
 
 Change a size with `memo.config({"NAME": value})`. Use `None` as the value to go back to the

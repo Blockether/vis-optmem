@@ -7,11 +7,15 @@ the next step when one is due.
 from __future__ import annotations
 
 import datetime
+import importlib
+import importlib.util
+import json
 import os
 import re
 from collections import deque
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from importlib import metadata
 from pathlib import Path
 from typing import Annotated
 
@@ -21,7 +25,8 @@ from vis_optmem.store import (
     SIZE_NAMES,
     SIZES,
     DamagedSummary,
-    Store,
+    FileStore,
+    MemoryStore,
     parse_size,
     pretty,
 )
@@ -34,6 +39,9 @@ RAW_BLOCK_LIMIT = 16
 
 Larger blocks are summarized from the summaries of their two halves.
 """
+
+STORE_GROUP = "vis_optmem.stores"
+"""Entry point group of named stores: ``MEMORY_STORE=<name>`` selects one."""
 
 VIS_PART_BYTES = 8000
 """Largest part of one result, in bytes.
@@ -223,7 +231,9 @@ class StoreInfo:
     """The memory folder."""
 
     text: Annotated[str, "What to read: whether the folder is new."]
-    path: Annotated[str, "The memory folder."]
+    path: Annotated[
+        str, "Where the memory is: its folder, or the place of a custom store."
+    ]
     memories: Annotated[int, "Number of memories."]
     is_new: Annotated[bool, "True when this call created the folder."]
 
@@ -238,10 +248,91 @@ class Imported:
     due: Annotated[int, "Number of summaries that are due."]
 
 
+Base = Callable[[], str | os.PathLike[str]]
+
+_loaded: dict[tuple[str, str, str], MemoryStore] = {}
+
+
+def _factory(reference: str, base: Base | None) -> Callable[..., MemoryStore]:
+    if ":" not in reference:
+        found = metadata.entry_points(group=STORE_GROUP, name=reference)
+        if not found:
+            names = sorted(
+                point.name for point in metadata.entry_points(group=STORE_GROUP)
+            )
+            known = f" Installed stores: {', '.join(names)}." if names else ""
+            raise ValueError(
+                f"MEMORY_STORE={reference} names no installed store.{known} "
+                "Use module:factory, path/to/store.py:factory or an installed store name."
+            )
+        return next(iter(found)).load()
+    source, _, name = reference.rpartition(":")
+    if source.endswith(".py"):
+        path = os.path.expanduser(source)
+        if not os.path.isabs(path) and base is not None:
+            path = os.path.join(os.fspath(base()), path)
+        path = os.path.abspath(path)
+        spec = importlib.util.spec_from_file_location(
+            f"vis_optmem_store_{abs(hash(path))}", path
+        )
+        if spec is None or spec.loader is None or not os.path.isfile(path):
+            raise ValueError(f"MEMORY_STORE: no Python file at {pretty(Path(path))}.")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    else:
+        module = importlib.import_module(source)
+    try:
+        return getattr(module, name)
+    except AttributeError:
+        raise ValueError(f"MEMORY_STORE: {source} has no {name}.") from None
+
+
+def load_store(
+    reference: str,
+    config: Mapping[str, object] | None = None,
+    *,
+    base: Base | None = None,
+) -> MemoryStore:
+    """Build a custom store and keep it for the next calls.
+
+    ``reference`` is ``module:factory``, ``path/to/store.py:factory`` or the name of an
+    entry point in the ``vis_optmem.stores`` group. A relative file path starts at
+    ``base``. The factory is a ``MemoryStore`` subclass or a function that returns a
+    store; ``config`` gives its keyword arguments.
+    """
+    options = dict(config or {})
+    where = os.fspath(base()) if base is not None else ""
+    key = (reference, json.dumps(options, sort_keys=True, default=str), where)
+    if key not in _loaded:
+        store = _factory(reference, base)(**options)
+        if not isinstance(store, MemoryStore):
+            raise TypeError(
+                f"MEMORY_STORE={reference} made a {type(store).__name__}, not a MemoryStore."
+            )
+        _loaded[key] = store
+    return _loaded[key]
+
+
+def _store_config() -> dict[str, object]:
+    raw = os.environ.get("MEMORY_STORE_CONFIG", "").strip()
+    if not raw:
+        return {}
+    try:
+        config = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise ValueError(f"MEMORY_STORE_CONFIG is not valid JSON: {error}.") from None
+    if not isinstance(config, dict):
+        raise ValueError("MEMORY_STORE_CONFIG must be a JSON object.")
+    return config
+
+
 class Memo:
     """Permanent memory in the OptMem format, shared by every session on this machine.
 
-    The memory folder is ``directory``, else ``$MEMORY_DIR``, else
+    The memory is ``store`` when you give one: a ``MemoryStore``, or a function that
+    returns one for each call. Else ``$MEMORY_STORE`` selects a custom store (see
+    ``load_store``) with the JSON object in ``$MEMORY_STORE_CONFIG`` as its arguments.
+    Else the memory is the OptMem folder ``directory``, else ``$MEMORY_DIR``, else
     ``~/.optmem/memory``: the same folder that the ``memo`` tool uses.
 
     ``base`` returns the folder for a relative path. Vis passes the session
@@ -254,10 +345,12 @@ class Memo:
         self,
         directory: str | os.PathLike[str] | None = None,
         *,
-        base: Callable[[], str | os.PathLike[str]] | None = None,
+        base: Base | None = None,
+        store: MemoryStore | Callable[[], MemoryStore] | None = None,
     ) -> None:
         self._directory = directory
         self._base = base
+        self._custom = store
 
     def _path(self) -> Path:
         chosen = os.path.expanduser(
@@ -269,18 +362,28 @@ class Memo:
             chosen = os.path.join(os.fspath(self._base()), chosen)
         return Path(os.path.abspath(chosen))
 
-    def _open(self) -> tuple[Store, dict[str, int]]:
-        store = Store(self._path())
+    def _store(self) -> MemoryStore:
+        if isinstance(self._custom, MemoryStore):
+            return self._custom
+        if self._custom is not None:
+            return self._custom()
+        reference = os.environ.get("MEMORY_STORE", "").strip()
+        if reference and self._directory is None:
+            return load_store(reference, _store_config(), base=self._base)
+        return FileStore(self._path())
+
+    def _open(self) -> tuple[MemoryStore, dict[str, int]]:
+        store = self._store()
         if not store.exists():
             raise FileNotFoundError(
-                f"No memory at {pretty(store.directory)}. To create it, call {NAMESPACE}.init(). "
-                "To use a memory in another folder, set MEMORY_DIR to that folder."
+                f"No memory at {store.location}. To create it, call {NAMESPACE}.init(). "
+                "To use another memory, set MEMORY_DIR or MEMORY_STORE."
             )
         store.prepare()
         return store, store.sizes()
 
     def _request(
-        self, store: Store, sizes: dict[str, int], total: int
+        self, store: MemoryStore, sizes: dict[str, int], total: int
     ) -> SummaryRequest | None:
         due = store.due(total, limit=1)
         if not due:
@@ -321,16 +424,17 @@ class Memo:
         A new folder is a new memory. So wake and note never create one: a wrong
         MEMORY_DIR stops them instead of starting an empty memory.
         """
-        store = Store(self._path())
+        store = self._store()
         is_new = store.create()
         store.sizes()
         count = store.count()
-        place = pretty(store.directory)
+        place = store.location
         if is_new:
             text = f"Created {place}: one memory for every session on this machine."
         else:
             text = f"Found {place}: {_plural(count, 'memory', 'memories')}."
-        return StoreInfo(text, str(store.directory), count, is_new)
+        path = str(store.directory) if isinstance(store, FileStore) else place
+        return StoreInfo(text, path, count, is_new)
 
     def wake(self, part: int = 1, at: int | None = None) -> Wake:
         """Read your memory: recent memories in full, older ones as summaries.
@@ -570,8 +674,7 @@ class Memo:
                 overrides[key] = parse_size(key, value)
             changed.append(key)
         if changed:
-            with store.locked():
-                store.write_overrides(overrides)
+            store.write_overrides(overrides)
         values = tuple(
             SizeValue(
                 size.name,
@@ -649,30 +752,34 @@ class Memo:
 def status(
     directory: str | os.PathLike[str] | None = None,
     *,
-    base: Callable[[], str | os.PathLike[str]] | None = None,
+    base: Base | None = None,
+    store: MemoryStore | Callable[[], MemoryStore] | None = None,
 ) -> dict[str, object]:
     """Facts for the session context: memory count, summaries due and the memory size limit.
 
-    ``base`` resolves a relative folder, as in ``Memo``. It reports a problem as a
-    fact and never raises, so a bad folder cannot stop a session.
+    ``base`` and ``store`` choose the memory, as in ``Memo``. It reports a problem as a
+    fact and never raises, so a bad folder or an unreachable store cannot stop a session.
     """
-    store = Store(Memo(directory, base=base)._path())
-    if not store.exists():
-        return {"store": "missing", "path": pretty(store.directory)}
     try:
-        total = store.count()
+        chosen = Memo(directory, base=base, store=store)._store()
+    except Exception as error:
+        return {"store": "unavailable", "error": str(error)}
+    try:
+        if not chosen.exists():
+            return {"store": "missing", "path": chosen.location}
+        total = chosen.count()
         facts: dict[str, object] = {
             "memories": total,
-            "summaries_due": store.due_count(total),
+            "summaries_due": chosen.due_count(total),
         }
-    except OSError as error:
+    except Exception as error:
         return {
             "store": "unreadable",
-            "path": pretty(store.directory),
+            "path": chosen.location,
             "error": str(error),
         }
     try:
-        facts["max_bytes"] = store.sizes()["ENTRY_CHARS"]
-    except (OSError, ValueError) as error:
+        facts["max_bytes"] = chosen.sizes()["ENTRY_CHARS"]
+    except Exception as error:
         facts["config_error"] = str(error)
     return facts

@@ -7,12 +7,12 @@ import types
 import pytest
 
 from vis_optmem import store as store_module
-from vis_optmem.store import LOG_RECORD, TREE_RECORD, Store, parse_size
+from vis_optmem.store import LOG_RECORD, TREE_RECORD, FileStore, parse_size
 
 
 @pytest.fixture
 def store(folder):
-    created = Store(folder)
+    created = FileStore(folder)
     assert created.create() is True
     return created
 
