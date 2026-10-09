@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 from vis_optmem.cover import cover
+from vis_optmem.guard import UnsafeMemory, check_safe, problem
 from vis_optmem.store import (
     DEFAULT_DIRECTORY,
     SIZE_NAMES,
@@ -762,12 +763,14 @@ class Memo:
         lasting value. Save to ``scope="team"`` only general knowledge that
         every person may read. When a memory already says almost the same, the
         note is refused with that memory, so the same fact is not saved twice.
-        The result can ask for a summary: save it with memo.nap() before your next
-        action.
+        A note that seems to hold a secret or has profanity is refused, in every
+        memory. The result can ask for a summary: save it with memo.nap() before
+        your next action.
         """
         self._allow("note")
         store, sizes = self._open(scope)
         line = check_line(memory, sizes["ENTRY_CHARS"], what="memory")
+        check_safe(line, what="memory")
         if not force:
             twin = store.duplicate(line)
             if twin is not None:
@@ -810,7 +813,8 @@ class Memo:
 
         Without arguments, it shows the next summary that is due. Summaries are
         saved in a fixed order, so a block other than the next one is refused.
-        When another session saved the summary first, that summary stays.
+        When another session saved the summary first, that summary stays. A summary
+        that seems to hold a secret or has profanity is refused.
         """
         self._allow("nap")
         if (block is None) != (summary is None):
@@ -839,6 +843,7 @@ class Memo:
                 notes.append(f"#{name} is already saved.")
             else:
                 line = check_line(summary, sizes["ENTRY_CHARS"], what="summary")
+                check_safe(line, what="summary")
                 if store.put_summary(lo, hi, line):
                     saved, saved_summary = name, line
                     notes.append(f"#{name} saved.")
@@ -1131,6 +1136,9 @@ class Memo:
                 raise ValueError(
                     f"Line {number}: {size} bytes, and the limit is {limit}."
                 )
+            reason = problem(text, "memory")
+            if reason is not None:
+                raise UnsafeMemory(f"Line {number}: {reason} Nothing was imported.")
             items.append((date, text))
             last = date
         if not items:

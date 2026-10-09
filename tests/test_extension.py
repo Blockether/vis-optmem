@@ -9,6 +9,7 @@ import blockether.vis.extension as vis
 import pytest
 from conftest import fill
 
+from vis_optmem import UnsafeMemory
 from vis_optmem.memo import TEAM, Memo, Recall, Saved, Wake
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -275,6 +276,23 @@ def test_the_context_and_the_activity_show_the_memory_for_team(
         'memo.recall(r"postgres|migration", about="change a database schema safely", '
         'scope="all")'
     ) in prompt
+
+
+def test_the_prompt_asks_for_safe_english_memories_with_context(registered, memo):
+    # Blockether/vis#346: the prompt asked for no context and did not say what memo refuses.
+    prompt = registered.prompt({})
+    assert "refuse a line that looks like a secret or has profanity" in prompt
+    assert "in English and in professional language" in prompt
+    assert "translate memory, summary, pattern and about" in prompt
+    assert (
+        "the task key, the environment, the repository and the short commit SHA"
+        in prompt
+    )
+    with pytest.raises(UnsafeMemory) as refused:
+        memo.note("the deploy is bullshit")
+    failure = activity("note").render(phase="failure", error=refused.value)
+    assert (failure.summary, failure.content[0].text) == ("Failed", str(refused.value))
+    assert "bullshit" not in failure.content[0].text
 
 
 def test_the_prompt_leaves_out_the_tools_that_are_turned_off(registered, monkeypatch):

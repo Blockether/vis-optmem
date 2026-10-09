@@ -70,6 +70,14 @@ tool on. In Python, `Memo(disabled=["init"])` replaces the setting.
   repeat is. By default, a note is a repeat when it has the same numbers as one of the closest
   memories from `search` and shares at least 60% of its words. The result shows that memory. To
   save a different fact that looks similar, give `force=True`.
+- `memo.note()`, `memo.nap()` and `memo.import_memories()` refuse a line that seems to hold a
+  secret or has profanity, in every memory and every store. The secret rules find private keys,
+  JSON Web Tokens, AWS, GitHub, GitLab, Slack, Google, OpenAI, Anthropic, Stripe, npm and Hugging
+  Face tokens, `Bearer` and `Basic` values, tokens and passwords in URLs, and random values after
+  words like `password=` or `token:`. The error names the kind of problem and does not repeat the
+  value. `force=True` does not skip this check.
+- The agent prompt asks for memories and searches in English and in professional language, with
+  the task key, the environment, the repository and the short commit SHA when they apply.
 
 ## Where the memory is
 
