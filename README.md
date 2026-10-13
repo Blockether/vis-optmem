@@ -199,6 +199,70 @@ To build the service, implement a `MemoryStore` in it and serve it with
 `vis_optmem.remote.lambda_response(event, stores, token)`. The module docstring of
 `vis_optmem.remote` gives the protocol. `tests/test_remote.py` runs every memo tool through it.
 
+### Keep the memory in Cloudflare
+
+[`cloudflare/`](cloudflare/) is a complete memory service for Cloudflare Workers. It serves
+the protocol of `vis_optmem.remote`, so the client side is `RemoteStore` with no other code.
+
+- Each memory is a Durable Object with its own SQLite database. A Durable Object runs one
+  write at a time, so each write is atomic without retries.
+- Workers AI embeds each memory with `@cf/baai/bge-m3`, a multilingual model. So
+  `memo.recall(about=...)` finds memories by meaning, also in other languages.
+- `memo.note()` refuses a repeat when two conditions are true: the embeddings are close
+  (cosine of at least 0.85), and both lines have the same names. Names are numbers, paths,
+  flags, CamelCase and ALL-CAPS words, environment words such as `staging` and `production`,
+  and capitalized names. So "port 5432" and "port 5433" stay two memories.
+- A password protects the service. The Worker keeps it in the secret `MEMORY_STORE_TOKEN`.
+  Each person keeps the same value in the environment variable `MEMORY_STORE_TOKEN`, never in
+  `vis.yml`.
+
+To deploy it, you need a Cloudflare account and Node.js. Run these commands in `cloudflare/`:
+
+```bash
+npx wrangler login
+export MEMORY_STORE_TOKEN="$(openssl rand -base64 32)"   # keep it in your password manager
+printf %s "$MEMORY_STORE_TOKEN" | npx wrangler secret put MEMORY_STORE_TOKEN
+npx wrangler deploy
+```
+
+Wrangler shows the URL of the service, for example `https://vis-optmem.example.workers.dev`.
+Give the URL and the password to your team. Each person sets `MEMORY_STORE_TOKEN` in the
+shell profile before Vis starts, and the project `vis.yml` selects the service:
+
+```yaml
+environment:
+  MEMORY_TEAM_STORE: {literal: "vis_optmem.remote:RemoteStore"}
+  MEMORY_TEAM_STORE_CONFIG: {literal: '{"url": "https://vis-optmem.example.workers.dev/", "memory": "team"}'}
+  MEMORY_STORE_TOKEN: {env: MEMORY_STORE_TOKEN}
+```
+
+Then one person creates the memory with `memo.init(scope="team")`.
+
+To change the password, put a new secret with `npx wrangler secret put MEMORY_STORE_TOKEN`
+and give the new value to your team. The old value stops at once.
+
+Change these settings in `vars` of `cloudflare/wrangler.jsonc`:
+
+| Name              | Default           | Meaning                                                 |
+|-------------------|-------------------|---------------------------------------------------------|
+| `MEMORIES`        | `team`            | Memory names that the service keeps, or `*` for all     |
+| `EMBEDDING_MODEL` | `@cf/baai/bge-m3` | Workers AI model; a change embeds every memory again    |
+| `SEARCH_MIN`      | `0.5`             | Lowest cosine that `memo.recall(about=...)` shows       |
+| `DUPLICATE_MIN`   | `0.85`            | Lowest cosine of a repeat that `memo.note()` refuses    |
+
+The thresholds fit `bge-m3`. If you change the model, check them again with your own pairs of
+repeats and near misses.
+
+Costs and limits:
+
+- Each note, search and repeat check makes one Workers AI call. Workers AI has a free daily
+  allocation, and Cloudflare bills the use above it.
+- A Durable Object keeps the vectors of its memory in memory: 4 KB for each memory. So one
+  memory holds about 20,000 memories.
+
+To test a change, run `npm test` in `cloudflare/`. To run every memo tool against the Worker,
+start `npx wrangler dev` and follow the docstring of `tests/test_cloudflare.py`.
+
 The store runs in the Python environment of vis-optmem. That environment has the standard
 library and the packages that vis-optmem declares, not the shared Vis packages. So write the
 store with the standard library: `sqlite3` for a local file, or `urllib.request` for an HTTP

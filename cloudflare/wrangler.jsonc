@@ -1,0 +1,19 @@
+// The vis-optmem memory service. See "Keep the memory in Cloudflare" in the README.
+{
+  "name": "vis-optmem",
+  "main": "src/worker.js",
+  "compatibility_date": "2025-10-01",
+  "ai": { "binding": "AI", "remote": true },
+  "durable_objects": {
+    "bindings": [{ "name": "MEMORY", "class_name": "MemoryObject" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["MemoryObject"] }],
+  "vars": {
+    // The memories that the service keeps: a comma list, or "*" for every name.
+    "MEMORIES": "team",
+    // A change of the model embeds every memory again on its next search.
+    "EMBEDDING_MODEL": "@cf/baai/bge-m3"
+  },
+  "observability": { "enabled": true }
+  // The secret MEMORY_STORE_TOKEN is the password: `npx wrangler secret put MEMORY_STORE_TOKEN`.
+}
