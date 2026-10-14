@@ -155,18 +155,23 @@ def disabled_tools(names: str | Iterable[str] | None = None) -> frozenset[str]:
     """The tools that are turned off: ``names``, else ``$MEMORY_DISABLED_TOOLS``.
 
     A string lists tool names separated by commas or spaces, like
-    ``init,import_memories``. An unknown name raises ValueError, so a typo cannot
-    leave a tool on.
+    ``init,import_memories``. A name can have the ``memo.`` prefix that the agent
+    instructions show, like ``memo.init``. An unknown name raises ValueError, so a
+    typo cannot leave a tool on.
     """
     if names is None:
         names = os.environ.get("MEMORY_DISABLED_TOOLS", "")
     if isinstance(names, str):
         names = re.split(r"[\s,]+", names)
-    chosen = frozenset(name.strip() for name in names if name.strip())
+    prefix = f"{NAMESPACE}."
+    chosen = frozenset(
+        name.strip().removeprefix(prefix) for name in names if name.strip()
+    )
     unknown = sorted(chosen - set(TOOLS))
     if unknown:
+        what = "is not a memo tool" if len(unknown) == 1 else "are not memo tools"
         raise ValueError(
-            f"MEMORY_DISABLED_TOOLS: {', '.join(unknown)} is not a memo tool. "
+            f"MEMORY_DISABLED_TOOLS: {', '.join(unknown)} {what}. "
             f"Use names from: {', '.join(TOOLS)}."
         )
     return chosen

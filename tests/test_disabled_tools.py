@@ -48,3 +48,15 @@ def test_a_wrong_name_turns_nothing_off_and_fails_loudly(memo, monkeypatch):
     monkeypatch.setenv("MEMORY_DISABLED_TOOLS", "imports")
     with pytest.raises(ValueError, match="MEMORY_DISABLED_TOOLS: imports"):
         memo.wake()
+
+
+def test_a_name_can_have_the_memo_prefix(memo, monkeypatch):
+    assert disabled_tools("memo.nap, memo.forget init") == {"nap", "forget", "init"}
+    monkeypatch.setenv("MEMORY_DISABLED_TOOLS", "memo.init")
+    with pytest.raises(ToolDisabled, match=r"memo.init is turned off"):
+        memo.init()
+    assert memo.note("a fact").id == 0
+    with pytest.raises(ValueError, match="TOOLS: imports is not a memo tool"):
+        disabled_tools("memo.imports")
+    with pytest.raises(ValueError, match="imports, other are not memo tools"):
+        disabled_tools("imports other")

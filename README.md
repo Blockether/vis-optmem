@@ -44,6 +44,7 @@ A subagent does not use the memory. Its leader reads and writes it.
 ### Turn tools off
 
 To stop agents from using some tools, list them in `MEMORY_DISABLED_TOOLS`, separated by commas.
+A name can have the `memo.` prefix that the agent instructions show, for example `memo.init`.
 For example, a company memory that an administrator creates and fills needs no `init` and no
 `import_memories`:
 
