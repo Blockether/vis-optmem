@@ -10,19 +10,21 @@ from vis_optmem.memo import Memo, parse_block, status
 from vis_optmem.store import TREE_RECORD, FileStore
 
 
-def test_only_init_creates_a_memory(folder):
+def test_the_first_call_creates_a_missing_memory(folder):
     tool = Memo(folder)
-    with pytest.raises(FileNotFoundError, match=r"call memo.init\(\)"):
-        tool.wake()
-    with pytest.raises(FileNotFoundError):
-        tool.note("lost")
-    assert not folder.exists()
-    created = tool.init()
-    assert (created.is_new, created.memories) == (True, 0)
-    tool.note("kept")
+    first = tool.wake()
+    assert first.at == 0
+    assert folder.is_dir()
+    assert tool.note("kept").id == 0
     again = tool.init()
     assert (again.is_new, again.memories) == (False, 1)
     assert "1 memory" in again.text
+
+
+def test_init_creates_a_memory_once(folder):
+    created = Memo(folder).init()
+    assert (created.is_new, created.memories) == (True, 0)
+    assert Memo(folder).init().is_new is False
 
 
 def test_memory_dir_selects_the_folder(folder, monkeypatch):

@@ -73,9 +73,10 @@ def test_a_memory_for_team_needs_a_place(memo, folder, shared):
         memo.note("team fact", scope=TEAM)
     assert status(scope=TEAM) == {"store": "unset"}
     missing = Memo(folder, team_directory=shared)
-    with pytest.raises(FileNotFoundError, match=r'memo.init\(scope="team"\)'):
-        missing.wake(scope=TEAM)
     assert status(shared, scope=TEAM)["store"] == "missing"
+    assert missing.recall("fact", scope=TEAM).total == 0
+    assert shared.is_dir()
+    assert status(shared, scope=TEAM)["memories"] == 0
 
 
 def test_the_environment_chooses_the_memory_for_team(folder, shared, monkeypatch):

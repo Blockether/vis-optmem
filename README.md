@@ -15,7 +15,7 @@ design and the same files. See [Credits](#credits).
 vis-agent extension install 'blockether/vis-optmem' --global --trust
 ```
 
-Then ask an agent to create the memory, or call `memo.init()` once yourself. After that, each
+The first tool call creates the memory folder, so you do not need `memo.init()`. After that, each
 session reads its memory before other work and saves new facts as it works.
 
 ## Tools

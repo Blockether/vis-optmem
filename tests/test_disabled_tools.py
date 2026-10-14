@@ -17,14 +17,17 @@ def test_turned_off_tools_refuse_and_the_others_work(memo, tmp_path, monkeypatch
     assert memo.recall("fact").total == 1
 
 
-def test_a_missing_memory_does_not_point_to_a_turned_off_init(folder, monkeypatch):
-    monkeypatch.setenv("MEMORY_DISABLED_TOOLS", "init")
-    with pytest.raises(FileNotFoundError, match="Ask the person who set up the memory"):
-        Memo(folder).wake()
-    assert not folder.exists()
-    monkeypatch.delenv("MEMORY_DISABLED_TOOLS")
-    with pytest.raises(FileNotFoundError, match=r"call memo.init\(\)"):
-        Memo(folder).wake()
+def test_a_missing_memory_works_without_init(tmp_path, monkeypatch):
+    # MEMORY_DIR names a new folder and init is off: the first tool creates it.
+    monkeypatch.setenv("MEMORY_DIR", ".memory")
+    monkeypatch.setenv("MEMORY_DISABLED_TOOLS", "memo.init")
+    tool = Memo(base=lambda: tmp_path)
+    assert tool.recall("fact").total == 0
+    assert (tmp_path / ".memory").is_dir()
+    assert tool.note("a fact").id == 0
+    assert tool.wake().at == 1
+    with pytest.raises(ToolDisabled):
+        tool.init()
 
 
 def test_the_python_argument_wins_over_the_environment(folder, monkeypatch):

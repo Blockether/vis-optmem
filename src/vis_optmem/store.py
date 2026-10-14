@@ -222,7 +222,7 @@ class MemoryStore(ABC):
 
     @abstractmethod
     def exists(self) -> bool:
-        """True when the memory exists. ``Memo`` creates a memory only in ``init()``."""
+        """True when the memory exists. ``Memo`` creates a missing memory before it uses it."""
 
     @abstractmethod
     def create(self) -> bool:

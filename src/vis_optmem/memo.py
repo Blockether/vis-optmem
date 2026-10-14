@@ -572,18 +572,14 @@ class Memo:
         return FileStore(path)
 
     def _open(self, scope: str = PERSONAL) -> tuple[MemoryStore, dict[str, int]]:
+        """Open the memory of ``scope``, and create it when it does not exist.
+
+        Every tool creates a missing memory, as ``init`` does. A person who turns
+        ``init`` off then still gets a working memory in the folder that they set.
+        """
         store = self._store(scope)
         if not store.exists():
-            folder, variable, _ = VARIABLES[scope]
-            off = self._disabled if self._disabled is not None else disabled_tools()
-            if "init" in off:
-                create = "Ask the person who set up the memory to create it."
-            else:
-                create = f"To create it, call {_call('init', scope=scope)}."
-            raise FileNotFoundError(
-                f"No memory at {store.location}. {create} "
-                f"To use another memory, set {folder} or {variable}."
-            )
+            store.create()
         store.prepare()
         return store, store.sizes()
 
@@ -631,9 +627,8 @@ class Memo:
     def init(self, scope: MemoryScope = PERSONAL) -> StoreInfo:
         """Create a memory when it does not exist. Calling it again changes nothing.
 
-        Call it once for each memory, before its first note. wake and note never
-        create a memory, so a wrong MEMORY_DIR or MEMORY_TEAM_DIR stops them
-        instead of starting an empty memory.
+        Every other tool also creates a missing memory, so a first ``wake`` or
+        ``note`` works without it. Call it to see where the memory is.
         """
         self._allow("init")
         store = self._store(scope)
