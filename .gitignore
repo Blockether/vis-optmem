@@ -6,3 +6,6 @@ __pycache__/
 node_modules/
 .wrangler/
 .dev.vars
+# Vis resolves the declared ranges at install time. A shipped lock would pin
+# vis-agent and every other package to one exact version.
+uv.lock
