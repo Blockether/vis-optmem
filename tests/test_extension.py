@@ -31,7 +31,6 @@ ENV = (
     "MEMORY_TEAM_DIR",
     "MEMORY_TEAM_STORE",
     "MEMORY_TEAM_STORE_CONFIG",
-    "MEMORY_DISABLED_TOOLS",
     "MEMORY_STORE_TOKEN",
 )
 
@@ -293,22 +292,6 @@ def test_the_prompt_asks_for_safe_english_memories_with_context(registered, memo
     failure = activity("note").render(phase="failure", error=refused.value)
     assert (failure.summary, failure.content[0].text) == ("Failed", str(refused.value))
     assert "bullshit" not in failure.content[0].text
-
-
-def test_the_prompt_leaves_out_the_tools_that_are_turned_off(registered, monkeypatch):
-    assert "memo.forget(block" in registered.prompt({})
-    monkeypatch.setenv("MEMORY_DISABLED_TOOLS", "init,import_memories,forget")
-    prompt = registered.prompt({})
-    assert "memo.forget(block" not in prompt
-    assert "memo.note(memory" in prompt
-    assert prompt.endswith(
-        "- These tools are turned off here: memo.forget, memo.import_memories, "
-        "memo.init. Do not call them."
-    )
-    monkeypatch.setenv("MEMORY_DISABLED_TOOLS", "imports")
-    assert registered.prompt({}).endswith(
-        "Every memo tool fails until the setting is fixed."
-    )
 
 
 def test_every_parameter_is_described_and_scope_lists_its_values(registered):

@@ -43,19 +43,19 @@ A subagent does not use the memory. Its leader reads and writes it.
 
 ### Turn tools off
 
-To stop agents from using some tools, list them in `MEMORY_DISABLED_TOOLS`, separated by commas.
-A name can have the `memo.` prefix that the agent instructions show, for example `memo.init`.
-For example, a company memory that an administrator creates and fills needs no `init` and no
-`import_memories`:
+To stop agents from using some memo tools, turn them off in the Vis tool lists. For example, a
+company memory that an administrator creates and fills needs no `init` and no `import_memories`:
 
 ```yaml
-environment:
-  MEMORY_DISABLED_TOOLS: {literal: "init,import_memories"}
+# vis.yml
+tools:
+  deny:
+    - memo.init
+    - memo.import_memories
 ```
 
-A tool that is turned off refuses each call, and the agent instructions leave it out. The other
-tools work as before. A name that is not a memo tool stops every tool, so a typo cannot leave a
-tool on. In Python, `Memo(disabled=["init"])` replaces the setting.
+Vis removes a tool that is off from the session and refuses each call to it. You can also set the
+lists in the project, group or session settings of Vis.
 
 ## How the memory works
 

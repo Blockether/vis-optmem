@@ -13,7 +13,7 @@ import json
 import os
 import re
 from collections import deque
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from importlib import metadata
 from itertools import zip_longest
@@ -69,19 +69,6 @@ VARIABLES = {
     ),
 }
 """The environment variables that choose each memory: folder, custom store, store config."""
-
-TOOLS = (
-    "init",
-    "wake",
-    "note",
-    "nap",
-    "recall",
-    "zoom",
-    "forget",
-    "config",
-    "import_memories",
-)
-"""Every memo tool. ``MEMORY_DISABLED_TOOLS`` can turn any of them off."""
 
 STORE_GROUP = "vis_optmem.stores"
 """Entry point group of named stores: ``MEMORY_STORE=<name>`` selects one."""
@@ -145,36 +132,6 @@ class MemoryNotSet(LookupError):
 
 class DuplicateMemory(ValueError):
     """A memory already says almost the same as the new note."""
-
-
-class ToolDisabled(PermissionError):
-    """The person who set up the memory turned this tool off."""
-
-
-def disabled_tools(names: str | Iterable[str] | None = None) -> frozenset[str]:
-    """The tools that are turned off: ``names``, else ``$MEMORY_DISABLED_TOOLS``.
-
-    A string lists tool names separated by commas or spaces, like
-    ``init,import_memories``. A name can have the ``memo.`` prefix that the agent
-    instructions show, like ``memo.init``. An unknown name raises ValueError, so a
-    typo cannot leave a tool on.
-    """
-    if names is None:
-        names = os.environ.get("MEMORY_DISABLED_TOOLS", "")
-    if isinstance(names, str):
-        names = re.split(r"[\s,]+", names)
-    prefix = f"{NAMESPACE}."
-    chosen = frozenset(
-        name.strip().removeprefix(prefix) for name in names if name.strip()
-    )
-    unknown = sorted(chosen - set(TOOLS))
-    if unknown:
-        what = "is not a memo tool" if len(unknown) == 1 else "are not memo tools"
-        raise ValueError(
-            f"MEMORY_DISABLED_TOOLS: {', '.join(unknown)} {what}. "
-            f"Use names from: {', '.join(TOOLS)}."
-        )
-    return chosen
 
 
 def parse_block(block: str) -> tuple[int, int]:
@@ -497,21 +454,10 @@ class Memo:
         store: MemoryStore | Callable[[], MemoryStore] | None = None,
         team_directory: str | os.PathLike[str] | None = None,
         team_store: MemoryStore | Callable[[], MemoryStore] | None = None,
-        disabled: str | Iterable[str] | None = None,
     ) -> None:
         self._directory = {PERSONAL: directory, TEAM: team_directory}
         self._base = base
         self._custom = {PERSONAL: store, TEAM: team_store}
-        self._disabled = None if disabled is None else disabled_tools(disabled)
-
-    def _allow(self, tool: str) -> None:
-        """Raise ToolDisabled when ``tool`` is turned off."""
-        off = self._disabled if self._disabled is not None else disabled_tools()
-        if tool in off:
-            raise ToolDisabled(
-                f"{NAMESPACE}.{tool} is turned off in this setup (MEMORY_DISABLED_TOOLS). "
-                "Do not call it again."
-            )
 
     def _path(self, scope: str = PERSONAL) -> Path | None:
         folder, _, _ = VARIABLES[scope]
@@ -630,7 +576,6 @@ class Memo:
         Every other tool also creates a missing memory, so a first ``wake`` or
         ``note`` works without it. Call it to see where the memory is.
         """
-        self._allow("init")
         store = self._store(scope)
         is_new = store.create()
         store.sizes()
@@ -666,7 +611,6 @@ class Memo:
         call for the next one. When the read needs a summary that is not written
         yet, the result has no lines and asks for that summary first.
         """
-        self._allow("wake")
         store, sizes = self._open(scope)
         now = store.count()
         if part < 1:
@@ -767,7 +711,6 @@ class Memo:
         memory. The result can ask for a summary: save it with memo.nap() before
         your next action.
         """
-        self._allow("note")
         store, sizes = self._open(scope)
         line = check_line(memory, sizes["ENTRY_CHARS"], what="memory")
         check_safe(line, what="memory")
@@ -816,7 +759,6 @@ class Memo:
         When another session saved the summary first, that summary stays. A summary
         that seems to hold a secret or has profanity is refused.
         """
-        self._allow("nap")
         if (block is None) != (summary is None):
             raise ValueError(
                 "Give both block and summary, or neither. "
@@ -886,7 +828,6 @@ class Memo:
         ``scope="all"`` searches the personal memory and the team memory
         in one call. Each line then starts with its memory, like ``[team]``.
         """
-        self._allow("recall")
         if pattern is None and about is None:
             raise ValueError(
                 "Give pattern (a regular expression), about (plain words), or both, "
@@ -994,7 +935,6 @@ class Memo:
         Each half is a summary, or the memory itself when the half holds one
         memory. Zoom into a half again to go down to single memories.
         """
-        self._allow("zoom")
         store, _ = self._open(scope)
         lo, hi = parse_block(block)
         total = store.count()
@@ -1021,7 +961,6 @@ class Memo:
         The memories stay. Later summaries of the same sizes are dropped too, and
         memo.nap() then asks for each of them again.
         """
-        self._allow("forget")
         store, _ = self._open(scope)
         lo, hi = parse_block(block)
         dropped = store.drop_summaries(lo, hi)
@@ -1053,7 +992,6 @@ class Memo:
         Sizes only choose what wake shows and how long a line can be, so a change
         rewrites no memory.
         """
-        self._allow("config")
         store, _ = self._open(scope)
         overrides = store.overrides()
         changed = []
@@ -1098,7 +1036,6 @@ class Memo:
         The dates must not go back in time, also not before the newest memory.
         Empty lines are skipped. When one line is wrong, nothing is added.
         """
-        self._allow("import_memories")
         store, sizes = self._open(scope)
         source = Path(os.path.expanduser(path))
         try:

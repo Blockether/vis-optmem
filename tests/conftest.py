@@ -11,7 +11,6 @@ def no_memory_settings(monkeypatch):
     for names in VARIABLES.values():
         for name in names:
             monkeypatch.delenv(name, raising=False)
-    monkeypatch.delenv("MEMORY_DISABLED_TOOLS", raising=False)
 
 
 @pytest.fixture
