@@ -277,6 +277,21 @@ def test_the_context_and_the_activity_show_the_memory_for_team(
     ) in prompt
 
 
+def test_the_prompt_lets_the_agent_save_to_a_set_team_memory(
+    registered, folder, tmp_path, monkeypatch
+):
+    # Blockether/vis#491: the prompt called a writable team memory "for search only",
+    # so agents refused memo.note(scope="team").
+    monkeypatch.setenv("MEMORY_DIR", str(folder))
+    unset = registered.prompt({})
+    assert '"team": no team memory is set' in unset
+    assert 'scope="team")' not in unset
+    monkeypatch.setenv("MEMORY_TEAM_DIR", str(tmp_path / "team"))
+    team = registered.prompt({})
+    assert "search only" not in team
+    assert 'Search it, and save to it with memo.note(memory, scope="team")' in team
+
+
 def test_the_prompt_asks_for_safe_english_memories_with_context(registered, memo):
     # Blockether/vis#346: the prompt asked for no context and did not say what memo refuses.
     prompt = registered.prompt({})

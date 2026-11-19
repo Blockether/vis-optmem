@@ -2,7 +2,7 @@
 
 import blockether.vis.extension as vis
 
-from vis_optmem.memo import TEAM, Memo, status
+from vis_optmem.memo import TEAM, Memo, MemoryNotSet, status
 from vis_optmem.store import SIZES
 
 CONTENT_LIMIT = 4000
@@ -10,7 +10,7 @@ DEFAULT_LIMIT = next(size.default for size in SIZES if size.name == "ENTRY_CHARS
 
 PROMPT = """memo surface active: permanent memory that lasts across sessions, in two memories.
 - "personal", the default: your own memory. Facts about the user, preferences and project details.
-- "team": one memory that the whole team shares, for search only. General knowledge that stays useful in other projects: best practices, reusable solutions, pitfalls with their fixes, team conventions.
+{team}
 Each tool takes scope="personal" (the default) or scope="team". memo.recall also takes scope="all": it searches both memories, and each line starts with its memory, like [team].
   memo.wake(part=1, at=None)              read a memory
   memo.note(memory)                       save one fact: one line of at most {limit} bytes
@@ -28,9 +28,11 @@ Each result has a `text` field. Print it and do what it says. apropos(r"^memo\\.
 - Write every memory, summary and search in English and in professional language, whatever language the user uses. First translate memory, summary, pattern and about.
 - Give each memory its work context when it applies: the task key, the environment, the repository and the short commit SHA (7 characters), like "PROJ-123 prod vis @7abdac4: the deploy works again after the cache fix."
 - When a result asks for a summary, save it with the call in that result, before your next action. session["memo"]["personal"]["summaries_due"] counts the summaries that are due.
-- If session["memo"]["team"]["store"] is "unset", there is no team memory: use only the personal memory.
 - If session["agent"]["role"] is "subagent", do not use memo.
 - Do not change the memory files yourself. memo owns them."""
+
+TEAM_SET = '- "team": one memory that the whole team shares. Search it, and save to it with memo.note(memory, scope="team"): general knowledge that stays useful in other projects, such as best practices, reusable solutions, pitfalls with their fixes and team conventions.'
+TEAM_UNSET = '- "team": no team memory is set, so use only the personal memory.'
 
 
 def _count(number, one, many):
@@ -175,9 +177,22 @@ def _workspace(env):
     return (lambda: cwd) if cwd else None
 
 
+def _team_is_set(base):
+    """Whether a folder or a store is set for the team memory. Opens no connection."""
+    try:
+        Memo(base=base)._store(TEAM)
+    except MemoryNotSet:
+        return False
+    except Exception:
+        pass  # A broken setting is still set; the session context shows its error.
+    return True
+
+
 def _prompt(env):
-    limit = status(base=_workspace(env)).get("max_bytes", DEFAULT_LIMIT)
-    return PROMPT.format(limit=limit)
+    base = _workspace(env)
+    limit = status(base=base).get("max_bytes", DEFAULT_LIMIT)
+    team = TEAM_SET if _team_is_set(base) else TEAM_UNSET
+    return PROMPT.format(limit=limit, team=team)
 
 
 def _ctx(env):
@@ -195,7 +210,7 @@ vis.register_extension(
         name="vis-optmem",
         description=(
             "Permanent memory for agents: a personal memory for every session on this "
-            "machine, and a team memory that agents search. Based on OptMem by Victor Taelin."
+            "machine, and a team memory that agents search and add to. Based on OptMem by Victor Taelin."
         ),
         version="0.7.0",
         alias="memo",
