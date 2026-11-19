@@ -2,7 +2,7 @@
 name = "vis-optmem"
 version = "0.6.1"
 description = "Permanent memory for Vis agents, based on OptMem by Victor Taelin."
-keywords = ["memory", "agents"]
+keywords = ["knowledge"]
 requires-python = ">=3.12"
 dependencies = [
   "vis-agent>=0.5.2",
