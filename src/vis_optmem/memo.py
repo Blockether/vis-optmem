@@ -21,7 +21,13 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 from vis_optmem.cover import cover
-from vis_optmem.guard import UnsafeMemory, check_safe, problem
+from vis_optmem.guard import (
+    UnsafeMemory,
+    check_language,
+    check_line,
+    check_safe,
+    problem,
+)
 from vis_optmem.store import (
     DEFAULT_DIRECTORY,
     SIZE_NAMES,
@@ -69,6 +75,9 @@ VARIABLES = {
     ),
 }
 """The environment variables that choose each memory: folder, custom store, store config."""
+
+LANGUAGE_VARIABLES = {PERSONAL: "MEMORY_LANGUAGE", TEAM: "MEMORY_TEAM_LANGUAGE"}
+"""The environment variable that gives the only language of each memory, like "en"."""
 
 STORE_GROUP = "vis_optmem.stores"
 """Entry point group of named stores: ``MEMORY_STORE=<name>`` selects one."""
@@ -155,25 +164,34 @@ def parse_block(block: str) -> tuple[int, int]:
     return lo, hi
 
 
-def check_line(text: str, limit: int, *, what: str) -> str:
-    """Return ``text`` without outer whitespace, or raise ValueError if it is not one short line."""
-    if not isinstance(text, str):
-        raise TypeError(f"The {what} must be a string.")
-    line = text.strip()
-    if not line:
-        raise ValueError(f"The {what} is empty. Write one line of text.")
-    if "\n" in line or "\r" in line:
-        lines = len(line.splitlines())
-        raise ValueError(
-            f"The {what} has {lines} lines. Write one line: merge them, or save them one by one."
-        )
-    size = len(line.encode("utf-8"))
-    if size > limit:
-        raise ValueError(
-            f"The {what} is too long: {size} bytes, and the limit is {limit}. "
-            "Letters with accents use 2 bytes. Make it shorter."
-        )
-    return line
+TRIM_BYTES = 2
+"""A line at most this many bytes over the limit is cut to the limit, not refused."""
+
+
+def shorten(line: str, limit: int) -> str:
+    """``line`` cut to ``limit`` bytes: extra spaces first, then a final period, then its end."""
+    line = re.sub(r" ([,.;:!?])", r"\1", re.sub(r"\s+", " ", line))
+    if len(line.encode("utf-8")) > limit and line.endswith("."):
+        line = line[:-1]
+    while len(line.encode("utf-8")) > limit:
+        line = line[:-1]
+    return line.rstrip()
+
+
+def fit_line(text: str, limit: int, *, what: str) -> tuple[str, int]:
+    """Check one line like ``check_line``, but cut a line at most TRIM_BYTES too long.
+
+    Return the line and the number of bytes that were cut.
+    """
+    line = text.strip() if isinstance(text, str) else text
+    if isinstance(line, str) and "\n" not in line and "\r" not in line:
+        size = len(line.encode("utf-8"))
+        if limit < size <= limit + TRIM_BYTES:
+            short = shorten(line, limit)
+            return check_line(short, limit, what=what), size - len(
+                short.encode("utf-8")
+            )
+    return check_line(line, limit, what=what), 0
 
 
 def paginate(lines: list[str], max_lines: int, max_bytes: int) -> list[list[str]]:
@@ -444,6 +462,10 @@ class Memo:
     workspace, so ``MEMORY_DIR=memory`` is ``<workspace>/memory``. An absolute or
     ``~`` path does not use ``base``. Without ``base``, a relative path starts at
     the working directory of the process, as in the ``memo`` tool.
+
+    ``language`` and ``team_language``, else ``$MEMORY_LANGUAGE`` and
+    ``$MEMORY_TEAM_LANGUAGE``, give the only language that each memory keeps, like
+    "en". Notes, summaries and ``about`` searches in another language are refused.
     """
 
     def __init__(
@@ -454,10 +476,20 @@ class Memo:
         store: MemoryStore | Callable[[], MemoryStore] | None = None,
         team_directory: str | os.PathLike[str] | None = None,
         team_store: MemoryStore | Callable[[], MemoryStore] | None = None,
+        language: str | None = None,
+        team_language: str | None = None,
     ) -> None:
         self._directory = {PERSONAL: directory, TEAM: team_directory}
         self._base = base
         self._custom = {PERSONAL: store, TEAM: team_store}
+        self._languages = {PERSONAL: language, TEAM: team_language}
+
+    def _language(self, scope: str) -> str:
+        """The language code that the memory of ``scope`` keeps, or "" for any language."""
+        chosen = self._languages[scope]
+        if chosen is None:
+            chosen = os.environ.get(LANGUAGE_VARIABLES[scope], "")
+        return check_language(chosen)
 
     def _path(self, scope: str = PERSONAL) -> Path | None:
         folder, _, _ = VARIABLES[scope]
@@ -691,7 +723,7 @@ class Memo:
         self,
         memory: Annotated[
             str,
-            "One fact on one line, at most ENTRY_CHARS bytes (280 by default). "
+            "One fact on one line, at most ENTRY_CHARS bytes (340 by default). "
             "It can never change.",
         ],
         scope: MemoryScope = PERSONAL,
@@ -708,24 +740,25 @@ class Memo:
         every person may read. When a memory already says almost the same, the
         note is refused with that memory, so the same fact is not saved twice.
         A note that seems to hold a secret or has profanity is refused, in every
-        memory. The result can ask for a summary: save it with memo.nap() before
-        your next action.
+        memory, and so is a note in another language when the memory keeps one.
+        A note at most 2 bytes too long is cut to the limit. The result can ask
+        for a summary: save it with memo.nap() before your next action.
         """
         store, sizes = self._open(scope)
-        line = check_line(memory, sizes["ENTRY_CHARS"], what="memory")
-        check_safe(line, what="memory")
-        if not force:
-            twin = store.duplicate(line)
-            if twin is not None:
-                retry = _call("note", '"<your line>"', "force=True", scope=scope)
-                raise DuplicateMemory(
-                    f"Not saved: this memory already says it:\n{twin.line}\n"
-                    "Memories never change, so do not save the same fact again. "
-                    "If your fact adds something, save only what is new. "
-                    f"If it is a different fact, call {retry}."
-                )
+        line, cut = fit_line(memory, sizes["ENTRY_CHARS"], what="memory")
+        # Check the whole text: a cut must not hide a secret at its end.
+        check_safe(memory.strip(), what="memory", language=self._language(scope))
         date = datetime.date.today().isoformat()
-        number = store.append([(date, line)])
+        entry, is_new = store.note(date, line, force)
+        if not is_new:
+            retry = _call("note", '"<your line>"', "force=True", scope=scope)
+            raise DuplicateMemory(
+                f"Not saved: this memory already says it:\n{entry.line}\n"
+                "Memories never change, so do not save the same fact again. "
+                "If your fact adds something, save only what is new. "
+                f"If it is a different fact, call {retry}."
+            )
+        number = entry.id
         # The team memory is searched, not read, so its notes ask for no summary.
         request = (
             self._request(store, sizes, number + 1, scope)
@@ -735,6 +768,11 @@ class Memo:
         text = f"Saved as #{number}" + (
             "." if scope == PERSONAL else " in the team memory."
         )
+        if cut:
+            text += (
+                f" It was {_plural(cut, 'byte', 'bytes')} too long, so it was cut to "
+                f"{sizes['ENTRY_CHARS']} bytes: {line}"
+            )
         if request is not None:
             text += "\n\n" + request.text
         return Saved(text, number, date, line, request, scope)
@@ -757,7 +795,8 @@ class Memo:
         Without arguments, it shows the next summary that is due. Summaries are
         saved in a fixed order, so a block other than the next one is refused.
         When another session saved the summary first, that summary stays. A summary
-        that seems to hold a secret or has profanity is refused.
+        that seems to hold a secret, has profanity or is in another language than the
+        memory keeps is refused. A summary at most 2 bytes too long is cut to the limit.
         """
         if (block is None) != (summary is None):
             raise ValueError(
@@ -784,11 +823,17 @@ class Memo:
                     )
                 notes.append(f"#{name} is already saved.")
             else:
-                line = check_line(summary, sizes["ENTRY_CHARS"], what="summary")
-                check_safe(line, what="summary")
+                line, cut = fit_line(summary, sizes["ENTRY_CHARS"], what="summary")
+                check_safe(
+                    summary.strip(), what="summary", language=self._language(scope)
+                )
                 if store.put_summary(lo, hi, line):
                     saved, saved_summary = name, line
-                    notes.append(f"#{name} saved.")
+                    notes.append(
+                        f"#{name} saved, cut by {_plural(cut, 'byte', 'bytes')} to the limit: {line}"
+                        if cut
+                        else f"#{name} saved."
+                    )
                 else:
                     notes.append(
                         f"#{name} changed meanwhile: another session saved or dropped it."
@@ -853,6 +898,9 @@ class Memo:
                 f"scope={scope!r} is not a memory. "
                 f"Use {PERSONAL!r}, {TEAM!r} or {ALL!r}."
             )
+        if about is not None:
+            for name in scopes:
+                check_safe(about, what="search text", language=self._language(name))
         opened = [(name, *self._open(name)) for name in scopes]
         limit = min(VIS_PART_BYTES, *(sizes["PART_CHARS"] for _, _, sizes in opened))
 
@@ -1073,7 +1121,7 @@ class Memo:
                 raise ValueError(
                     f"Line {number}: {size} bytes, and the limit is {limit}."
                 )
-            reason = problem(text, "memory")
+            reason = problem(text, "memory", self._language(scope))
             if reason is not None:
                 raise UnsafeMemory(f"Line {number}: {reason} Nothing was imported.")
             items.append((date, text))

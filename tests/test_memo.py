@@ -6,6 +6,7 @@ import pytest
 from conftest import fill
 
 from vis_optmem import memo as memo_module
+from vis_optmem.guard import UnsafeMemory
 from vis_optmem.memo import Memo, parse_block, status
 from vis_optmem.store import TREE_RECORD, FileStore
 
@@ -30,7 +31,7 @@ def test_init_creates_a_memory_once(folder):
 def test_memory_dir_selects_the_folder(folder, monkeypatch):
     monkeypatch.setenv("MEMORY_DIR", str(folder))
     assert Memo().init().path == str(folder)
-    assert status() == {"memories": 0, "summaries_due": 0, "max_bytes": 280}
+    assert status() == {"memories": 0, "summaries_due": 0, "max_bytes": 340}
 
 
 def refuse_base():
@@ -45,7 +46,7 @@ def test_a_relative_memory_dir_starts_at_the_base(tmp_path, monkeypatch):
     assert status(base=lambda: str(project)) == {
         "memories": 0,
         "summaries_due": 0,
-        "max_bytes": 280,
+        "max_bytes": 340,
     }
     assert Memo("other", base=lambda: project)._path() == project / "other"
 
@@ -100,8 +101,8 @@ def test_note_saves_one_line_with_the_date_and_the_next_id(memo):
     [
         ("   ", "empty"),
         ("one\ntwo", "2 lines"),
-        ("x" * 281, "281 bytes, and the limit is 280"),
-        ("ż" * 141, "282 bytes"),
+        ("x" * 343, "343 bytes, and the limit is 340"),
+        ("ż" * 172, "344 bytes"),
     ],
 )
 def test_note_refuses_what_is_not_one_short_line(memo, memory, message):
@@ -114,7 +115,7 @@ def test_a_full_pair_asks_for_its_summary_at_once(memo):
     memo.note("first")
     saved = memo.note("second")
     request = saved.request
-    assert (request.block, request.remaining, request.max_bytes) == ("0-1", 0, 280)
+    assert (request.block, request.remaining, request.max_bytes) == ("0-1", 0, 340)
     assert request.sources == (
         f"#0 {saved.date} first",
         f"#1 {saved.date} second",
@@ -310,7 +311,7 @@ def test_config_shows_changes_and_restores_sizes(memo):
     assert changed.changed == ("WAKE_LINES", "ENTRY_CHARS")
     assert changed.sizes[0].value == 300 and "(default 96)" in changed.text
     with pytest.raises(ValueError, match="limit is 200"):
-        memo.note("x" * 201)
+        memo.note("x" * 203)
     restored = memo.config({"WAKE_LINES": None})
     assert restored.sizes[0].value == 96
     with pytest.raises(ValueError, match="SPEED is not a size"):
@@ -342,7 +343,7 @@ def test_import_adds_dated_memories_in_order(memo, tmp_path):
         ),
         ("2024-02-30 no such day\n", "Line 1: 2024-02-30 is not a real date"),
         ("yesterday something\n", "Line 1: expected"),
-        ("2024-01-01 " + "x" * 281 + "\n", "Line 1: 281 bytes"),
+        ("2024-01-01 " + "x" * 341 + "\n", "Line 1: 341 bytes"),
         ("\n\n", "has no memories"),
     ],
 )
@@ -367,7 +368,7 @@ def test_status_reports_counts_and_problems(folder):
     tool.init()
     tool.note("a")
     tool.note("b")
-    assert status(folder) == {"memories": 2, "summaries_due": 1, "max_bytes": 280}
+    assert status(folder) == {"memories": 2, "summaries_due": 1, "max_bytes": 340}
     (folder / "config").write_text("SPEED = 1\n")
     assert "SPEED is not a size" in status(folder)["config_error"]
 
@@ -382,3 +383,40 @@ def test_status_reports_an_unreadable_folder_and_does_not_raise(folder, monkeypa
     facts = status(folder)
     assert facts["store"] == "unreadable"
     assert "Permission denied" in facts["error"]
+
+
+def test_a_line_at_most_2_bytes_too_long_is_cut_to_the_limit(memo):
+    saved = memo.note("Keep  " + "x" * 335 + ".")
+    assert saved.memory == "Keep " + "x" * 335
+    assert "It was 2 bytes too long, so it was cut to 340 bytes" in saved.text
+    assert memo.note("y" * 341).memory == "y" * 340
+    with pytest.raises(ValueError, match="343 bytes"):
+        memo.note("z" * 343)
+
+
+def test_a_cut_does_not_hide_a_secret_at_the_end(memo):
+    token = "ghp_" + "a1B2c3D4e5" * 3 + "a1B2c3"
+    line = "Push with " + "x" * (341 - 11 - len(token)) + " " + token
+    assert len(line.encode()) == 341
+    with pytest.raises(UnsafeMemory, match="GitHub token"):
+        memo.note(line)
+
+
+def test_a_memory_with_a_language_refuses_other_languages(tmp_path, monkeypatch):
+    tool = Memo(tmp_path / "memory", language="en")
+    tool.init()
+    with pytest.raises(
+        UnsafeMemory, match="seems to be in Polish, and this memory keeps English"
+    ):
+        tool.note("Użytkownik woli uv zamiast Poetry w projektach Python.")
+    assert tool.note("The user in Kraków prefers uv over Poetry.").id == 0
+    with pytest.raises(UnsafeMemory, match="Not searched"):
+        tool.recall(about="jak się wdraża na produkcję")
+    monkeypatch.setenv("MEMORY_LANGUAGE", "de")
+    with pytest.raises(UnsafeMemory, match="keeps German only"):
+        Memo(tmp_path / "memory").note(
+            "Deploy: the cache fix must run first and it is slow."
+        )
+    monkeypatch.setenv("MEMORY_LANGUAGE", "klingon")
+    with pytest.raises(ValueError, match="Unknown memory language 'klingon'"):
+        Memo(tmp_path / "memory").note("Any fact.")

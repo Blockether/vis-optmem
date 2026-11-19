@@ -64,7 +64,7 @@ def test_memory_store_selects_a_store_file_in_the_workspace(tmp_path, monkeypatc
     assert status(base=lambda: project) == {
         "memories": 1,
         "summaries_due": 0,
-        "max_bytes": 280,
+        "max_bytes": 340,
     }
     assert tool._store() is Memo(base=lambda: project)._store()
 

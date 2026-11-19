@@ -22,6 +22,7 @@ export const OPS = {
   due_count: [["total", "int"]],
   search: [["query", "str"], ["limit", "int"]],
   duplicate: [["text", "str"]],
+  note: [["date", "date"], ["text", "str"], ["force", "bool"]],
   matches: [["pattern", "str"], ["newest", "int"]],
 };
 
@@ -44,10 +45,15 @@ function isObject(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** A `YYYY-MM-DD` date. Other text can break the records of a file store. */
+const isDate = (value) => typeof value === "string" && /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value);
+
 function check(kind, name, value) {
   if (kind === "int?" && value === null) return null;
   if ((kind === "int" || kind === "int?") && Number.isInteger(value)) return value;
   if (kind === "str" && typeof value === "string") return value;
+  if (kind === "bool" && typeof value === "boolean") return value;
+  if (kind === "date" && isDate(value)) return value;
   if (
     kind === "items" &&
     Array.isArray(value) &&
@@ -55,7 +61,8 @@ function check(kind, name, value) {
       (item) =>
         Array.isArray(item) &&
         item.length === 2 &&
-        item.every((part) => typeof part === "string"),
+        isDate(item[0]) &&
+        typeof item[1] === "string",
     )
   ) {
     return value;
@@ -98,7 +105,8 @@ export function isServed(memory, allowed) {
   return names.includes("*") || names.includes(memory);
 }
 
-// Names: the duplicate check
+// Names: the duplicate check. src/vis_optmem/names.py has the same rules, and
+// tests/fixtures/names.json keeps both the same.
 
 const ENVIRONMENTS = new Set([
   "dev", "development", "staging", "stage", "prod", "production", "preprod", "qa",
@@ -108,36 +116,59 @@ const TECHNICAL = /\d|[\\/_.:@=$~#]|^-|\p{Ll}\p{Lu}|^\p{Lu}{2,}$/u;
 const PROPER = /^\p{Lu}\p{Ll}+$/u;
 const PROPER_STEM = 5;
 
+/** The words of `text` without outer punctuation, each with true at a sentence start. */
+function tokens(text) {
+  const found = [];
+  let sentenceStart = true;
+  for (const raw of String(text).split(/\s+/)) {
+    if (!raw) continue;
+    const token = raw.replace(/^[("'`[{]+/, "").replace(/[.,;:!?)"'`\]}]+$/, "");
+    if (token) found.push([token, sentenceStart]);
+    sentenceStart = /[.!?]["')\]]*$/.test(raw);
+  }
+  return found;
+}
+
+/** "name:" and the first 5 letters of `token`, in small letters, without accents. */
+function stem(token) {
+  const plain = token.toLowerCase().normalize("NFKD").replace(/\p{M}/gu, "");
+  return `name:${[...plain].slice(0, PROPER_STEM).join("")}`;
+}
+
 /**
  * The names in `text` that two memories must share to say the same fact.
  *
  * Embeddings cannot separate "port 5432" from "port 5433", or staging from
  * production. So a name is a technical token (digits, paths, file names, flags,
  * CamelCase, ALL-CAPS), an environment word, or a capitalized word that does not
- * start a sentence (its first 5 letters).
+ * start a sentence (its first 5 letters, without accents).
  */
 export function names(text) {
   const found = new Set();
-  let sentenceStart = true;
-  for (const raw of String(text).split(/\s+/)) {
-    const token = raw.replace(/^[("'`[{]+/, "").replace(/[.,;:!?)"'`\]}]+$/, "");
-    if (token) {
-      const lower = token.toLowerCase();
-      if (ENVIRONMENTS.has(lower)) found.add(`env:${lower}`);
-      else if (TECHNICAL.test(token)) found.add(lower);
-      else if (!sentenceStart && PROPER.test(token)) {
-        found.add(`name:${lower.slice(0, PROPER_STEM)}`);
-      }
-    }
-    if (raw) sentenceStart = /[.!?]["')\]]*$/.test(raw);
+  for (const [token, sentenceStart] of tokens(text)) {
+    const lower = token.toLowerCase();
+    if (ENVIRONMENTS.has(lower)) found.add(`env:${lower}`);
+    else if (TECHNICAL.test(token)) found.add(lower);
+    else if (!sentenceStart && PROPER.test(token)) found.add(stem(token));
   }
   return found;
 }
 
+/**
+ * True when `a` and `b` have the same names. Technical tokens and environment words
+ * must be the same. A proper name of one text must be a word of the other, in any case.
+ */
 export function sameNames(a, b) {
   const left = names(a);
   const right = names(b);
-  return left.size === right.size && [...left].every((name) => right.has(name));
+  const exact = (set) => [...set].filter((name) => !name.startsWith("name:")).sort().join("\n");
+  if (exact(left) !== exact(right)) return false;
+  const stems = (text) => new Set(tokens(text).map(([token]) => stem(token)));
+  const inA = stems(a);
+  const inB = stems(b);
+  return [...left, ...right]
+    .filter((name) => name.startsWith("name:"))
+    .every((name) => inA.has(name) && inB.has(name));
 }
 
 // Vectors

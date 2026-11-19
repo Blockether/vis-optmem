@@ -17,8 +17,10 @@ import {
   pythonPattern,
   sameNames,
 } from "./protocol.js";
+import { checkLanguage, checkLine, problem } from "./guard.js";
 
 const SEARCH_MIN = 0.5;
+const ENTRY_CHARS = 340;
 const DUPLICATE_MIN = 0.85;
 const DUPLICATE_CANDIDATES = 5;
 const EMBED_BATCH = 50;
@@ -81,6 +83,7 @@ export class MemoryObject extends DurableObject {
     this.model = env.EMBEDDING_MODEL || "@cf/baai/bge-m3";
     this.searchMin = Number(env.SEARCH_MIN ?? SEARCH_MIN);
     this.duplicateMin = Number(env.DUPLICATE_MIN ?? DUPLICATE_MIN);
+    this.language = env.MEMORY_LANGUAGE ?? "";
     this.memories = null; // [{date, text, vec}] by id, once loaded
     this.loading = null;
   }
@@ -88,6 +91,7 @@ export class MemoryObject extends DurableObject {
   /** Run one checked operation. Return the status and body of the answer. */
   async run(op, args) {
     try {
+      this.guard(op, args);
       return { status: 200, body: { result: await this[op](args) } };
     } catch (error) {
       if (error instanceof ProtocolError) {
@@ -95,6 +99,29 @@ export class MemoryObject extends DurableObject {
       }
       console.error(`Memory op ${op} failed`, error);
       return { status: 500, body: failure("RemoteError", error?.message ?? error) };
+    }
+  }
+
+  /** Refuse what Memo refuses, like `answer` in src/vis_optmem/remote.py. */
+  guard(op, args) {
+    const language = checkLanguage(this.language);
+    const refuse = (text, what) => {
+      const reason = problem(text, what, language);
+      if (reason !== null) throw new ProtocolError(400, "ValueError", reason);
+    };
+    if (op === "search") return refuse(args.query, "search text");
+    const texts = {
+      append: () => args.items.map(([, text]) => ["memory", text]),
+      note: () => [["memory", args.text]],
+      put_summary: () => [["summary", args.text]],
+    }[op]?.();
+    if (!texts) return;
+    const limit = this.overrides().ENTRY_CHARS ?? ENTRY_CHARS;
+    for (const [what, text] of texts) {
+      if (checkLine(text, limit, what) !== text) {
+        throw new ProtocolError(400, "ValueError", `The ${what} has outer whitespace. Remove it.`);
+      }
+      refuse(text, what);
     }
   }
 
@@ -189,7 +216,11 @@ export class MemoryObject extends DurableObject {
   async append({ items }) {
     if (!items.length) return this.total();
     const vectors = await this.embed(items.map(([, text]) => text));
-    // No await from here: the ids and the rows go in one step.
+    return this.insert(items, vectors);
+  }
+
+  /** Add the rows with new ids in one synchronous step. Return the first id. */
+  insert(items, vectors) {
     return this.ctx.storage.transactionSync(() => {
       const first = this.total();
       items.forEach(([date, text], i) => {
@@ -199,6 +230,22 @@ export class MemoryObject extends DurableObject {
       items.forEach(([date, text], i) => this.memories?.push({ date, text, vec: vectors[i] }));
       return first;
     });
+  }
+
+  /** The id of the memory that already says `text`, or undefined. */
+  twin(vector, text, memories) {
+    const ids = nearest(vector, memories.map((m) => m.vec), this.duplicateMin, DUPLICATE_CANDIDATES);
+    return ids.find((candidate) => sameNames(text, memories[candidate].text));
+  }
+
+  /** Check for a repeat and add the memory in one step, so a fact is saved once. */
+  async note({ date, text, force }) {
+    const [vector] = await this.embed([text]);
+    const memories = await this.load();
+    // No await from here: no other note runs between the check and the write.
+    const id = force ? undefined : this.twin(vector, text, memories);
+    if (id !== undefined) return [this.entry(id), false];
+    return [{ id: this.insert([[date, text]], [vector]), date, text }, true];
   }
 
   async search({ query, limit }) {
@@ -213,8 +260,7 @@ export class MemoryObject extends DurableObject {
     if (!text.trim() || this.total() === 0) return null;
     const [vector] = await this.embed([text]);
     const memories = await this.load();
-    const ids = nearest(vector, memories.map((m) => m.vec), this.duplicateMin, DUPLICATE_CANDIDATES);
-    const id = ids.find((candidate) => sameNames(text, memories[candidate].text));
+    const id = this.twin(vector, text, memories);
     return id === undefined ? null : this.entry(id);
   }
 

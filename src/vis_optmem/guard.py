@@ -1,7 +1,8 @@
-"""Checks that keep secrets and profanity out of a memory.
+"""Checks that keep secrets, profanity and other languages out of a memory.
 
 A memory never changes and nothing removes it, so ``Memo`` checks every line
-before a store gets it, for every store and both scopes. The secret rules are
+before a store gets it, for every store and both scopes. ``remote.answer`` does
+the same checks in a service, so a client cannot go around them. The secret rules are
 written for this module in the style of gitleaks: known token formats, keys,
 passwords in URLs and random values after a word like ``password=``. A refusal
 names the kind of problem and never repeats the value.
@@ -65,8 +66,142 @@ a word, because Polish adds prefixes. The others match at the start of a word or
 as whole words, so names like Scunthorpe, Wankel and Hujiang stay allowed."""
 
 
+LANGUAGES: dict[str, tuple[str, frozenset[str], str]] = {
+    code: (name, frozenset(words.split()), letters)
+    for code, name, words, letters in (
+        (
+            "en",
+            "English",
+            "the of and to in is are was were be been for on with as by at from that this "
+            "these those it its not but or if then than which who what when where how there "
+            "their they we you he she will would can could should must has have had do does "
+            "did an into about after before only also just more most other some such each",
+            "",
+        ),
+        (
+            "pl",
+            "Polish",
+            "się nie jest są być był była było że na w z ze do od po przez przy przed dla jak "
+            "ale lub albo oraz czy gdy jeśli już tylko też jego jej ich ten ta te tego tej "
+            "tym który która które może można trzeba ma mają będzie bo więc pod nad między "
+            "tak bez jako",
+            "ąćęłńśźż",
+        ),
+        (
+            "de",
+            "German",
+            "der die das und ist sind nicht mit von zu den dem des ein eine einen auf für "
+            "sich auch als wie aber oder wenn dass nur noch bei nach aus wird werden kann "
+            "haben hat",
+            "äöüß",
+        ),
+        (
+            "fr",
+            "French",
+            "le la les des une est sont pas pour avec dans sur que qui par ce cette mais ou "
+            "ne plus aux du au être avoir fait sans",
+            "çèêàùâîôûë",
+        ),
+        (
+            "es",
+            "Spanish",
+            "el los las del una es son por para con que pero como más sin sobre también "
+            "este esta muy hay ser",
+            "ñ¿¡",
+        ),
+        (
+            "it",
+            "Italian",
+            "il gli della delle sono non con che una più anche questo questa come nel alla dei",
+            "",
+        ),
+        (
+            "pt",
+            "Portuguese",
+            "os das dos uma não para com que mais mas como também este esta são pelo pela",
+            "ãõ",
+        ),
+        (
+            "nl",
+            "Dutch",
+            "het een en van zijn niet met voor op dat maar ook als bij naar wordt",
+            "ĳ",
+        ),
+    )
+}
+"""Each language: (name, common short words, letters that only it uses here)."""
+
+LANGUAGE_MIN_WORDS = 4
+"""Fewer small words than this say too little about the language: the line passes."""
+
+
 class UnsafeMemory(ValueError):
-    """A line holds a secret or profanity. The message never repeats it."""
+    """A line holds a secret or profanity, or is in another language. The message never repeats it."""
+
+
+def check_language(language: str) -> str:
+    """Return the language code ``language`` in lowercase, "" for none, or raise ValueError."""
+    code = language.strip().lower()
+    if code and code not in LANGUAGES:
+        raise ValueError(
+            f"Unknown memory language {language!r}. Use one of: {', '.join(LANGUAGES)}."
+        )
+    return code
+
+
+def language_scores(text: str) -> dict[str, int]:
+    """For each language, how many small words of ``text`` are its common words or letters.
+
+    Only words in small letters count: a capitalized word is a name, and a word with
+    digits or signs is technical.
+    """
+    words = [
+        token
+        for token in (raw.strip(".,;:!?()[]{}\"'`") for raw in visible(text).split())
+        if token.isalpha() and token.islower()
+    ]
+    scores = dict.fromkeys(LANGUAGES, 0)
+    if len(words) < LANGUAGE_MIN_WORDS:
+        return scores
+    for word in words:
+        for code, (_, common, letters) in LANGUAGES.items():
+            if word in common or (letters and any(c in letters for c in word)):
+                scores[code] += 1
+    return scores
+
+
+def other_language(text: str, language: str) -> str | None:
+    """The name of the language of ``text`` when it is clearly not ``language``, else None."""
+    code = check_language(language)
+    if not code:
+        return None
+    scores = language_scores(text)
+    best = max((c for c in LANGUAGES if c != code), key=lambda c: scores[c])
+    # Most lines of a language have its small words, so none of them is a sign too.
+    if scores[best] > scores[code] and (scores[best] >= 2 or scores[code] == 0):
+        return LANGUAGES[best][0]
+    return None
+
+
+def check_line(text: str, limit: int, *, what: str) -> str:
+    """Return ``text`` without outer whitespace, or raise ValueError if it is not one short line."""
+    if not isinstance(text, str):
+        raise TypeError(f"The {what} must be a string.")
+    line = text.strip()
+    if not line:
+        raise ValueError(f"The {what} is empty. Write one line of text.")
+    if "\n" in line or "\r" in line:
+        lines = len(line.splitlines())
+        raise ValueError(
+            f"The {what} has {lines} lines. Write one line: merge them, or save them one by one."
+        )
+    size = len(line.encode("utf-8"))
+    if size > limit:
+        raise ValueError(
+            f"The {what} is too long: {size} bytes, and the limit is {limit}. "
+            "Letters with accents use 2 bytes. Make it shorter."
+        )
+    return line
 
 
 def entropy(value: str) -> float:
@@ -124,8 +259,22 @@ def has_profanity(text: str) -> bool:
     return PROFANITY.search(visible(text)) is not None
 
 
-def problem(text: str, what: str) -> str | None:
-    """Why ``text`` must not be saved, without the unsafe part, or None when it is safe."""
+def problem(text: str, what: str, language: str = "") -> str | None:
+    """Why ``text`` must not be saved, without the unsafe part, or None when it is safe.
+
+    ``language`` is the code of the only language that the memory keeps, like "en",
+    or "" for any language. A search text is checked only for its language.
+    """
+    other = other_language(text, language)
+    if other is not None:
+        wanted = LANGUAGES[check_language(language)][0]
+        verb = "searched" if what == "search text" else "saved"
+        return (
+            f"Not {verb}: the {what} seems to be in {other}, and this memory keeps "
+            f"{wanted} only. Write it again in {wanted}."
+        )
+    if what == "search text":
+        return None
     kind = secret_kind(text)
     if kind is not None:
         return (
@@ -138,9 +287,9 @@ def problem(text: str, what: str) -> str | None:
     return None
 
 
-def check_safe(text: str, *, what: str) -> str:
-    """Return ``text``, or raise UnsafeMemory if it holds a secret or profanity."""
-    reason = problem(text, what)
+def check_safe(text: str, *, what: str, language: str = "") -> str:
+    """Return ``text``, or raise UnsafeMemory if it holds a secret or profanity or is not in ``language``."""
+    reason = problem(text, what, language)
     if reason is not None:
         raise UnsafeMemory(reason)
     return text

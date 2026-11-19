@@ -8,6 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import pytest
 from test_custom_store import run
 
+from vis_optmem import remote
 from vis_optmem.memo import TEAM, DuplicateMemory, Memo
 from vis_optmem.remote import RemoteStore, answer, lambda_response
 from vis_optmem.store import FileStore
@@ -74,7 +75,7 @@ def test_the_team_memory_can_live_in_the_service(tmp_path, service, monkeypatch)
         tool.note("Deploy with the blue green script.", scope=TEAM)
     assert "#0 " in tool.recall("blue", scope=TEAM).text
     assert "[team] #0 " in tool.recall(about="deploy script", scope="all").text
-    assert {"duplicate", "matches", "search"} <= set(calls)
+    assert {"note", "matches", "search"} <= set(calls)
     assert "scan" not in calls and "entries" not in calls
 
 
@@ -107,6 +108,15 @@ def test_answer_checks_each_request(tmp_path):
         ({**good, "op": "entries", "args": {"lo": "0", "hi": 1}}, "lo is not"),
         ({**good, "op": "entries", "args": {"lo": True, "hi": 1}}, "lo is not"),
         ({**good, "op": "append", "args": {"items": [["2026-01-01"]]}}, "items"),
+        ({**good, "op": "append", "args": {"items": [["1\n2", "Use uv."]]}}, "items"),
+        (
+            {
+                **good,
+                "op": "note",
+                "args": {"date": "2026-01-01\n#9", "text": "Use uv.", "force": False},
+            },
+            "date is not a valid date",
+        ),
     ]
     for request, message in bad:
         status, body = answer(request, stores)
@@ -131,3 +141,76 @@ def test_a_store_failure_becomes_a_remote_error(tmp_path):
         lambda_response(event, lambda memory: Broken(tmp_path), TOKEN)["statusCode"]
         == 400
     )
+
+
+def test_the_service_refuses_what_memo_refuses(tmp_path):
+    def stores(memory):
+        store = FileStore(tmp_path / memory)
+        store.create()
+        return store
+
+    def ask(op, language="", **args):
+        request = {"version": 1, "memory": "team", "op": op, "args": args}
+        return answer(request, stores, language=language)
+
+    token = "ghp_" + "a1B2c3D4e5" * 4
+    refused = [
+        (
+            ask("append", items=[["2026-01-01", f"The token is {token}"]]),
+            "GitHub token",
+        ),
+        (ask("note", date="2026-01-01", text="x" * 341, force=False), "limit is 340"),
+        (ask("put_summary", lo=0, hi=2, text=" padded "), "outer whitespace"),
+        (
+            ask(
+                "note",
+                "en",
+                date="2026-01-01",
+                text="To jest notatka po polsku, nie po angielsku.",
+                force=False,
+            ),
+            "keeps English only",
+        ),
+        (
+            ask("search", "en", query="jak się wdraża na produkcję", limit=5),
+            "Not searched",
+        ),
+    ]
+    for (status, body), message in refused:
+        assert status == 400 and message in body["error"]["message"], message
+        assert token not in body["error"]["message"]
+    status, body = ask(
+        "note", "en", date="2026-01-01", text="Use uv for Python.", force=False
+    )
+    assert (status, body["result"][1]) == (200, True)
+    assert ask("count") == (200, {"result": 1})
+
+
+def test_a_note_checks_and_saves_in_one_request(tmp_path, service):
+    url, calls = service
+    store = RemoteStore(url, "team", token=TOKEN)
+    store.create()
+    entry, is_new = store.note("2026-01-01", "Postgres listens on port 5432.")
+    assert (entry.id, is_new) == (0, True)
+    twin, is_new = store.note("2026-01-02", "Postgres listens on port 5432.")
+    assert (twin.id, twin.date, is_new) == (0, "2026-01-01", False)
+    assert (
+        store.note("2026-01-02", "Postgres listens on port 5432.", force=True)[0].id
+        == 1
+    )
+    assert calls.count("note") == 3 and "duplicate" not in calls
+
+
+def test_a_service_without_the_note_op_still_saves_notes(
+    tmp_path, service, monkeypatch
+):
+    url, calls = service
+    monkeypatch.delitem(remote.OPS, "note")
+    store = RemoteStore(url, "team", token=TOKEN)
+    store.create()
+    assert store.note("2026-01-01", "Use uv for Python.") == (
+        remote.Entry(0, "2026-01-01", "Use uv for Python."),
+        True,
+    )
+    assert store.note("2026-01-01", "Use uv for Python.")[1] is False
+    assert {"note", "duplicate", "append"} <= set(calls)

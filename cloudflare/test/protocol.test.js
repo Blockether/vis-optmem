@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
 import {
@@ -49,6 +50,8 @@ describe("checkRequest", () => {
       [{ ...good, op: "entries", args: { lo: "0", hi: 1 } }, "lo is not"],
       [{ ...good, op: "entries", args: { lo: true, hi: 1 } }, "lo is not"],
       [{ ...good, op: "append", args: { items: [["2026-01-01"]] } }, "items"],
+      [{ ...good, op: "append", args: { items: [["1\n2", "Use uv."]] } }, "items"],
+      [{ ...good, op: "note", args: { date: "2026-01-01\n#9", text: "Use uv.", force: false } }, "date is not a valid date"],
       [{ ...good, op: "write_overrides", args: { overrides: { WAKE_LINES: false } } }, "sizes"],
     ];
     for (const [request, message] of bad) {
@@ -135,5 +138,32 @@ describe("due", () => {
     assert.deepEqual(due(levelCount, 5, 1), [[2, 4]]);
     assert.equal(dueCount(levelCount, 5), 2);
     assert.equal(dueCount(() => 9, 5), 0);
+  });
+});
+
+describe("names fixture", () => {
+  const fixture = JSON.parse(
+    readFileSync(new URL("../../tests/fixtures/names.json", import.meta.url), "utf8"),
+  );
+
+  it("finds the same names as src/vis_optmem/names.py", () => {
+    for (const { text, names: expected } of fixture.names) {
+      assert.deepEqual([...names(text)].sort(), expected, text);
+    }
+  });
+
+  it("decides same names like src/vis_optmem/names.py", () => {
+    for (const { a, b, same } of fixture.same_names) {
+      assert.equal(sameNames(a, b), same, `${a} | ${b}`);
+      assert.equal(sameNames(b, a), same, `${b} | ${a}`);
+    }
+  });
+});
+
+describe("note", () => {
+  it("takes a date, a text and a boolean force", () => {
+    const note = { ...good, op: "note", args: { date: "2026-01-01", text: "Use uv.", force: false } };
+    assert.deepEqual(checkRequest(note).args, { date: "2026-01-01", text: "Use uv.", force: false });
+    assert.match(refusal({ ...note, args: { ...note.args, force: 0 } }), /^400 Argument force is not a valid bool/);
   });
 });

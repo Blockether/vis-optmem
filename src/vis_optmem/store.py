@@ -13,6 +13,9 @@ identity and each lookup is one seek:
   ``(lo // (hi - lo)) * TREE_RECORD`` of ``TREE/<hi - lo>``.
 
 Its writers hold an exclusive lock on ``.lock``: the same lock that the ``memo`` tool takes.
+
+The records are wider than in OptMem, so a memory holds 340 bytes. A folder with the
+OptMem widths is made wide under the lock before its first write; reads accept both.
 """
 
 from __future__ import annotations
@@ -28,13 +31,18 @@ from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from vis_optmem.names import same_names
+
 try:
     import fcntl
 except ImportError:  # Windows has no fcntl.
     fcntl = None
 
-LOG_RECORD = 320
-TREE_RECORD = 288
+LOG_RECORD = 384
+TREE_RECORD = 352
+OPTMEM_LOG_RECORD = 320
+OPTMEM_TREE_RECORD = 288
+"""The record widths of OptMem. ``FileStore`` reads them and makes them wide before a write."""
 DEFAULT_DIRECTORY = "~/.optmem/memory"
 LOCK_TIMEOUT_S = 30.0
 STEM_LETTERS = 6
@@ -58,7 +66,7 @@ class Size:
 
 SIZES = (
     Size("WAKE_LINES", 96, "lines that wake shows: the reading budget"),
-    Size("ENTRY_CHARS", 280, "longest memory or summary, in bytes"),
+    Size("ENTRY_CHARS", 340, "longest memory or summary, in bytes"),
     Size("PART_CHARS", 20000, "largest part of one output, in bytes"),
     Size("PART_LINES", 500, "largest part of one output, in lines"),
 )
@@ -148,14 +156,17 @@ def _entry(record: bytes) -> Entry:
     return Entry(int(head[1:]), date, text)
 
 
-def _entries(data: bytes) -> list[Entry]:
-    usable = len(data) - len(data) % LOG_RECORD
-    return [_entry(data[at : at + LOG_RECORD]) for at in range(0, usable, LOG_RECORD)]
+def _entries(data: bytes, width: int = LOG_RECORD) -> list[Entry]:
+    usable = len(data) - len(data) % width
+    return [_entry(data[at : at + width]) for at in range(0, usable, width)]
 
 
-def _count(path: Path, width: int) -> int:
+def _count(path: Path, wide: int, optmem: int) -> int:
     try:
-        return path.stat().st_size // width
+        with open(path, "rb") as handle:
+            return os.fstat(handle.fileno()).st_size // _handle_width(
+                handle, wide, optmem
+            )
     except FileNotFoundError:
         return 0
 
@@ -169,6 +180,51 @@ def _drop_partial(path: Path, width: int) -> None:
     if size % width:
         with open(path, "r+b") as handle:
             handle.truncate(size - size % width)
+
+
+def _handle_width(handle, wide: int, optmem: int) -> int:
+    """The record width of an open file: ``optmem`` when its first record ends at that width.
+
+    Read the width and the records from one handle: a widen that replaces the file
+    in the meantime does not change the file that the handle reads.
+    """
+    at = handle.tell()
+    handle.seek(0)
+    head = handle.read(optmem)
+    handle.seek(at)
+    # A record holds one newline, at its end, so a wide record has none at this byte.
+    return optmem if head[optmem - 1 : optmem] == b"\n" else wide
+
+
+def _width(path: Path, wide: int, optmem: int) -> int:
+    """The record width of ``path``."""
+    try:
+        with open(path, "rb") as handle:
+            return _handle_width(handle, wide, optmem)
+    except FileNotFoundError:
+        return wide
+
+
+def _widen(path: Path, wide: int, optmem: int) -> None:
+    """Give every record of ``path`` the width ``wide``. Text and order stay the same.
+
+    The new file replaces the old one in one rename, so an interrupted call leaves
+    the old file, and the next call does the work again.
+    """
+    if _width(path, wide, optmem) != optmem:
+        return
+    data = path.read_bytes()
+    pad = b" " * (wide - optmem)
+    wider = b"".join(
+        data[at : at + optmem - 1] + pad + b"\n"
+        for at in range(0, len(data) - len(data) % optmem, optmem)
+    )
+    temporary = path.with_name(path.name + ".wide")
+    with open(temporary, "wb") as handle:
+        handle.write(wider)
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temporary, path)
 
 
 def _append(path: Path, data: bytes) -> None:
@@ -309,19 +365,35 @@ class MemoryStore(ABC):
         Override it to decide repeats in your service, for example when two embeddings
         are very close. ``force=True`` in ``memo.note`` skips this check. The default
         compares ``text`` with the DUPLICATE_CANDIDATES closest memories from ``search``.
-        A memory repeats ``text`` when it has the same numbers and shares at least
-        DUPLICATE_SIMILARITY of the words of both. So "port 5432" and "port 6543" are
-        different facts.
+        A memory repeats ``text`` when it has the same names (``names.same_names``) and
+        shares at least DUPLICATE_SIMILARITY of the words of both. So "port 5432" and
+        "port 6543", or staging and production, are different facts.
         """
         words = _words(text)
-        numbers = {word for word in words if any(c.isdigit() for c in word)}
         for entry in self.search(text, DUPLICATE_CANDIDATES):
-            other = _words(entry.text)
-            if {word for word in other if any(c.isdigit() for c in word)} != numbers:
+            if not same_names(text, entry.text):
                 continue
+            other = _words(entry.text)
             if len(words & other) / len(words | other) >= DUPLICATE_SIMILARITY:
                 return entry
         return None
+
+    def note(self, date: str, text: str, force: bool = False) -> tuple[Entry, bool]:
+        """Add one memory unless a memory already says it. Return a memory and True when it is new.
+
+        When ``duplicate`` finds a memory, return it with False and add nothing.
+        ``force`` skips that check. ``memo.note`` uses this method.
+
+        Check and add in one atomic step, so two sessions that note one fact at the
+        same time save it once. The default is atomic only when the store has one
+        writer: it calls ``duplicate`` and then ``append``. ``FileStore`` holds its
+        lock for both steps.
+        """
+        if not force:
+            twin = self.duplicate(text)
+            if twin is not None:
+                return twin, False
+        return Entry(self.append([(date, text)]), date, text), True
 
     def matches(self, pattern: str, newest: int) -> tuple[int, list[Entry]]:
         """Count the memories that match ``pattern``, and give the newest ``newest`` of them.
@@ -394,10 +466,26 @@ class MemoryStore(ABC):
 
 
 class FileStore(MemoryStore):
-    """One memory folder in the OptMem format."""
+    """One memory folder in the OptMem format, with wider records."""
 
     def __init__(self, directory: Path) -> None:
         self.directory = directory
+        self._is_wide = False
+
+    def _paths(self) -> list[tuple[Path, int, int]]:
+        trees = sorted((self.directory / "TREE").glob("[0-9]*"))
+        return [(self.log_path, LOG_RECORD, OPTMEM_LOG_RECORD)] + [
+            (path, TREE_RECORD, OPTMEM_TREE_RECORD)
+            for path in trees
+            if path.name.isdigit() and path.is_file()
+        ]
+
+    def _widen(self) -> None:
+        """Make every record wide. Hold the lock when you call it."""
+        if not self._is_wide:
+            for path, wide, optmem in self._paths():
+                _widen(path, wide, optmem)
+            self._is_wide = True
 
     @property
     def log_path(self) -> Path:
@@ -418,9 +506,12 @@ class FileStore(MemoryStore):
         return self.directory.is_dir()
 
     def prepare(self) -> None:
-        """Add the log and the summary folder to an existing memory folder when missing."""
+        """Add the log and the summary folder when missing, and make OptMem records wide."""
         (self.directory / "TREE").mkdir(exist_ok=True)
         open(self.log_path, "a").close()
+        if any(_width(path, wide, old) == old for path, wide, old in self._paths()):
+            with self.locked():
+                self._widen()
 
     def create(self) -> bool:
         """Create the memory folder, or complete it. Return True for a new folder."""
@@ -495,19 +586,21 @@ class FileStore(MemoryStore):
 
     def count(self) -> int:
         """The number of memories in the log."""
-        return _count(self.log_path, LOG_RECORD)
+        return _count(self.log_path, LOG_RECORD, OPTMEM_LOG_RECORD)
 
     def entries(self, lo: int, hi: int) -> list[Entry]:
         """Memories ``lo`` to ``hi - 1``, in one read."""
         with open(self.log_path, "rb") as handle:
-            handle.seek(lo * LOG_RECORD)
-            return _entries(handle.read((hi - lo) * LOG_RECORD))
+            width = _handle_width(handle, LOG_RECORD, OPTMEM_LOG_RECORD)
+            handle.seek(lo * width)
+            return _entries(handle.read((hi - lo) * width), width)
 
     def scan(self) -> Iterator[Entry]:
         """Every memory, oldest first, without holding the whole log in memory."""
         with open(self.log_path, "rb") as handle:
-            while chunk := handle.read(LOG_RECORD * 4096):
-                yield from _entries(chunk)
+            width = _handle_width(handle, LOG_RECORD, OPTMEM_LOG_RECORD)
+            while chunk := handle.read(width * 4096):
+                yield from _entries(chunk, width)
 
     def append(self, items: Sequence[tuple[str, str]]) -> int:
         """Append ``(date, text)`` memories. Return the id of the first one.
@@ -516,28 +609,41 @@ class FileStore(MemoryStore):
         Every record is encoded first: a record that does not fit writes nothing.
         """
         with self.locked():
-            _drop_partial(self.log_path, LOG_RECORD)
-            first = self.count()
-            data = b"".join(
-                _record(f"#{first + offset} {date} {text}", LOG_RECORD)
-                for offset, (date, text) in enumerate(items)
-            )
-            _append(self.log_path, data)
-            return first
+            return self._append(items)
+
+    def _append(self, items: Sequence[tuple[str, str]]) -> int:
+        self._widen()
+        _drop_partial(self.log_path, LOG_RECORD)
+        first = self.count()
+        data = b"".join(
+            _record(f"#{first + offset} {date} {text}", LOG_RECORD)
+            for offset, (date, text) in enumerate(items)
+        )
+        _append(self.log_path, data)
+        return first
+
+    def note(self, date: str, text: str, force: bool = False) -> tuple[Entry, bool]:
+        """Check for a repeat and append under one lock, so a fact is saved once."""
+        with self.locked():
+            twin = None if force else self.duplicate(text)
+            if twin is not None:
+                return twin, False
+            return Entry(self._append([(date, text)]), date, text), True
 
     # Summaries
 
     def level_count(self, size: int) -> int:
         """The number of summaries of blocks of ``size`` memories."""
-        return _count(self.level_path(size), TREE_RECORD)
+        return _count(self.level_path(size), TREE_RECORD, OPTMEM_TREE_RECORD)
 
     def summary(self, lo: int, hi: int) -> str | None:
         """The summary of block ``[lo, hi)``, or None when it is not written."""
         size = hi - lo
         try:
             with open(self.level_path(size), "rb") as handle:
-                handle.seek((lo // size) * TREE_RECORD)
-                record = handle.read(TREE_RECORD)
+                width = _handle_width(handle, TREE_RECORD, OPTMEM_TREE_RECORD)
+                handle.seek((lo // size) * width)
+                record = handle.read(width)
         except FileNotFoundError:
             return None
         try:
@@ -554,6 +660,7 @@ class FileStore(MemoryStore):
         path = self.level_path(size)
         record = _record(text, TREE_RECORD)
         with self.locked():
+            self._widen()
             _drop_partial(path, TREE_RECORD)
             if self.level_count(size) != lo // size:
                 return False
@@ -569,6 +676,7 @@ class FileStore(MemoryStore):
         dropped = []
         size = hi - lo
         with self.locked():
+            self._widen()
             total = self.count()
             while size <= total:
                 keep, have = lo // size, self.level_count(size)

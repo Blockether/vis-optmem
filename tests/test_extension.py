@@ -209,7 +209,7 @@ def test_prompt_and_context_follow_the_memory_folder(registered, folder, monkeyp
     monkeypatch.setenv("MEMORY_DIR", str(folder))
     assert registered.ctx({})["memo"]["personal"]["store"] == "missing"
     assert registered.ctx({})["memo"]["team"] == {"store": "unset"}
-    assert "one line of at most 280 bytes" in registered.prompt({})
+    assert "one line of at most 340 bytes" in registered.prompt({})
     Memo().init()
     Memo().config({"ENTRY_CHARS": 200})
     assert "one line of at most 200 bytes" in registered.prompt({})
@@ -246,9 +246,9 @@ def test_a_relative_memory_dir_is_in_the_session_workspace(monkeypatch, tmp_path
     assert spec["ctx"]({"cwd": str(project)})["memo"]["personal"] == {
         "memories": 1,
         "summaries_due": 0,
-        "max_bytes": 280,
+        "max_bytes": 340,
     }
-    assert "one line of at most 280 bytes" in spec["prompt"]({"cwd": str(project)})
+    assert "one line of at most 340 bytes" in spec["prompt"]({"cwd": str(project)})
     assert spec["ctx"]({})["memo"]["personal"]["store"] == "missing"
     assert not (tmp_path / "memory").exists()
 
@@ -266,7 +266,7 @@ def test_the_context_and_the_activity_show_the_memory_for_team(
     personal = Saved("Saved as #0.", 0, "2024-01-01", "my fact", None)
     assert shown("note", personal) == ("Saved as #0", ["my fact"])
     context = registered.ctx({"cwd": str(project)})["memo"]
-    assert context["team"] == {"memories": 1, "summaries_due": 0, "max_bytes": 280}
+    assert context["team"] == {"memories": 1, "summaries_due": 0, "max_bytes": 340}
     assert context["personal"]["store"] == "missing"
     assert 'scope="team"' in registered.prompt({"cwd": str(project)})
     prompt = registered.prompt({"cwd": str(project)})

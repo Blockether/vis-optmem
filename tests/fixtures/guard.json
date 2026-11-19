@@ -1,0 +1,909 @@
+[
+ {
+  "text": [
+   "key: -----BEGIN RSA ",
+   "PRIVATE KEY----- MIIEow"
+  ],
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory seems to hold a private key. Memories never change, so a secret would stay there for ever. Save the fact without the value, like \"the deploy token is in the DEPLOY_TOKEN variable\"."
+ },
+ {
+  "text": [
+   "-----BEGIN OPENSSH ",
+   "PRIVATE KEY-----"
+  ],
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory seems to hold a private key. Memories never change, so a secret would stay there for ever. Save the fact without the value, like \"the deploy token is in the DEPLOY_TOKEN variable\"."
+ },
+ {
+  "text": [
+   "session ",
+   "eyJ",
+   "We29HTGBsTwtkkr2iLvg",
+   ".",
+   "eyJ",
+   "ShTNA4HF1QqQvGjlI80egti4zc6MVk",
+   ".",
+   "",
+   "AMS5XswPZv5IlClmAyI653lhJ"
+  ],
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory seems to hold a JSON Web Token. Memories never change, so a secret would stay there for ever. Save the fact without the value, like \"the deploy token is in the DEPLOY_TOKEN variable\"."
+ },
+ {
+  "text": [
+   "aws id ",
+   "AKIA",
+   "PIAKWBKWU9MHKPGO"
+  ],
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory seems to hold an AWS access key. Memories never change, so a secret would stay there for ever. Save the fact without the value, like \"the deploy token is in the DEPLOY_TOKEN variable\"."
+ },
+ {
+  "text": [
+   "push with ",
+   "ghp_",
+   "qC2juJLn1IJSYQycRcoojF6RCdHBkH136Fe4"
+  ],
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory seems to hold a GitHub token. Memories never change, so a secret would stay there for ever. Save the fact without the value, like \"the deploy token is in the DEPLOY_TOKEN variable\"."
+ },
+ {
+  "text": [
+   "github ",
+   "github_pat_",
+   "R5jcEh2DypPzbZesTUQZ2qVpyQpMyqr6Q1ZiAcY6rjhGa6flv1SDMJjWR6HU"
+  ],
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory seems to hold a GitHub token. Memories never change, so a secret would stay there for ever. Save the fact without the value, like \"the deploy token is in the DEPLOY_TOKEN variable\"."
+ },
+ {
+  "text": [
+   "glpat-",
+   "GRYNLTtQeM8qNV2maNNw"
+  ],
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory seems to hold a GitLab token. Memories never change, so a secret would stay there for ever. Save the fact without the value, like \"the deploy token is in the DEPLOY_TOKEN variable\"."
+ },
+ {
+  "text": [
+   "xoxb-",
+   "h1NkboAEXF8Y0j4StnoFZ1C1R9UzCF"
+  ],
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory seems to hold a Slack token. Memories never change, so a secret would stay there for ever. Save the fact without the value, like \"the deploy token is in the DEPLOY_TOKEN variable\"."
+ },
+ {
+  "text": [
+   "https://hooks.slack",
+   ".com/services/",
+   "T",
+   "NN8yqyzo",
+   "/",
+   "B",
+   "1Snz6nfp3LKQNgBnXGJKO3Ao"
+  ],
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory seems to hold a Slack token. Memories never change, so a secret would stay there for ever. Save the fact without the value, like \"the deploy token is in the DEPLOY_TOKEN variable\"."
+ },
+ {
+  "text": [
+   "AIza",
+   "Rt6g9EGYW6kmEsLaPHXOYKhkSghPw6rdnR6"
+  ],
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory seems to hold a Google API key. Memories never change, so a secret would stay there for ever. Save the fact without the value, like \"the deploy token is in the DEPLOY_TOKEN variable\"."
+ },
+ {
+  "text": [
+   "ya29.",
+   "RKlwNib7BoduPHsY2UqbD6YKKx0Zcq1Ky2BNigPI"
+  ],
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory seems to hold a Google OAuth secret. Memories never change, so a secret would stay there for ever. Save the fact without the value, like \"the deploy token is in the DEPLOY_TOKEN variable\"."
+ },
+ {
+  "text": [
+   "GOCSPX-",
+   "r9EtGGhfy595CywkGdq81gX57E1L"
+  ],
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory seems to hold a Google OAuth secret. Memories never change, so a secret would stay there for ever. Save the fact without the value, like \"the deploy token is in the DEPLOY_TOKEN variable\"."
+ },
+ {
+  "text": [
+   "sk-ant-api03-",
+   "hYwgXJfVqylp1LKt2PpVWvVeAsIm5DNFSFpZGjoTnh1aCJGL8LQJ0oC1umX1C7N2cTwZfVQy71OqR1kZ"
+  ],
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory seems to hold an Anthropic key. Memories never change, so a secret would stay there for ever. Save the fact without the value, like \"the deploy token is in the DEPLOY_TOKEN variable\"."
+ },
+ {
+  "text": [
+   "sk-proj-",
+   "6v0S7QxjkmCd4b1m98MqnQ85EyDhE9qX1OYM4ivebDvgPz5T"
+  ],
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory seems to hold an OpenAI key. Memories never change, so a secret would stay there for ever. Save the fact without the value, like \"the deploy token is in the DEPLOY_TOKEN variable\"."
+ },
+ {
+  "text": [
+   "old key ",
+   "sk-",
+   "C26nD9AokKjx1BQWO6lgsbHTIo22LBhiAWbv0Kli00ZORSl0"
+  ],
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory seems to hold an OpenAI key. Memories never change, so a secret would stay there for ever. Save the fact without the value, like \"the deploy token is in the DEPLOY_TOKEN variable\"."
+ },
+ {
+  "text": [
+   "sk_live_",
+   "C8r95XxJtJXaTu6HnWis2hKl"
+  ],
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory seems to hold a Stripe key. Memories never change, so a secret would stay there for ever. Save the fact without the value, like \"the deploy token is in the DEPLOY_TOKEN variable\"."
+ },
+ {
+  "text": [
+   "rk_test_",
+   "TsyeetTlGk4s28EBOl5WtDaJ"
+  ],
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory seems to hold a Stripe key. Memories never change, so a secret would stay there for ever. Save the fact without the value, like \"the deploy token is in the DEPLOY_TOKEN variable\"."
+ },
+ {
+  "text": [
+   "npm_",
+   "PmYkYkRIoMbR4zMtzOxlHytcRP0QrEEbnp7q"
+  ],
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory seems to hold an npm token. Memories never change, so a secret would stay there for ever. Save the fact without the value, like \"the deploy token is in the DEPLOY_TOKEN variable\"."
+ },
+ {
+  "text": [
+   "hf_",
+   "GZzhNQIHudrgERZEjhCOKvquiATQnOkwyD"
+  ],
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory seems to hold a Hugging Face token. Memories never change, so a secret would stay there for ever. Save the fact without the value, like \"the deploy token is in the DEPLOY_TOKEN variable\"."
+ },
+ {
+  "text": [
+   "curl -H 'Authorization: Bearer ",
+   "",
+   "icRyJtmqkd87P3GfTBmXnhFUqvH6mwLI",
+   "'"
+  ],
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory seems to hold a Bearer authorization value. Memories never change, so a secret would stay there for ever. Save the fact without the value, like \"the deploy token is in the DEPLOY_TOKEN variable\"."
+ },
+ {
+  "text": [
+   "Authorization: Basic ",
+   "dXNlcjpYazlwTG0yUXpS"
+  ],
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory seems to hold a Basic authorization value. Memories never change, so a secret would stay there for ever. Save the fact without the value, like \"the deploy token is in the DEPLOY_TOKEN variable\"."
+ },
+ {
+  "text": [
+   "AUTHORIZATION: BASIC ",
+   "dXNlcjpYazlwTG0yUXpS"
+  ],
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory seems to hold a Basic authorization value. Memories never change, so a secret would stay there for ever. Save the fact without the value, like \"the deploy token is in the DEPLOY_TOKEN variable\"."
+ },
+ {
+  "text": [
+   "git clone https://",
+   "",
+   "icRyJtmqkd87P3GfTBmXnhFUqvH6mwLI",
+   "@github.com/org/repo.git"
+  ],
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory seems to hold a token in a URL. Memories never change, so a secret would stay there for ever. Save the fact without the value, like \"the deploy token is in the DEPLOY_TOKEN variable\"."
+ },
+ {
+  "text": [
+   "DATABASE_URL=postgres://app:",
+   "Xk9pLm2Q@db.internal:5432/app"
+  ],
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory seems to hold a password in a URL. Memories never change, so a secret would stay there for ever. Save the fact without the value, like \"the deploy token is in the DEPLOY_TOKEN variable\"."
+ },
+ {
+  "text": [
+   "password=",
+   "Sup3rS3cr3t!"
+  ],
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory seems to hold a password or token value. Memories never change, so a secret would stay there for ever. Save the fact without the value, like \"the deploy token is in the DEPLOY_TOKEN variable\"."
+ },
+ {
+  "text": [
+   "aws_secret_access_key=",
+   "",
+   "kL4eVX54RVxxpoedCtKmsTJldgh6vd4un5faew2p"
+  ],
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory seems to hold a password or token value. Memories never change, so a secret would stay there for ever. Save the fact without the value, like \"the deploy token is in the DEPLOY_TOKEN variable\"."
+ },
+ {
+  "text": [
+   "GH_TOKEN: ",
+   "",
+   "Fc9OTTRQIkTDIuK9MW6f8WHs"
+  ],
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory seems to hold a password or token value. Memories never change, so a secret would stay there for ever. Save the fact without the value, like \"the deploy token is in the DEPLOY_TOKEN variable\"."
+ },
+ {
+  "text": [
+   "{\"password\": \"",
+   "Xk9pLm2QzR",
+   "\"}"
+  ],
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory seems to hold a password or token value. Memories never change, so a secret would stay there for ever. Save the fact without the value, like \"the deploy token is in the DEPLOY_TOKEN variable\"."
+ },
+ {
+  "text": [
+   "export API_KEY='",
+   "",
+   "icRyJtmqkd87P3GfTBmXnhFUqvH6mwLI",
+   "'"
+  ],
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory seems to hold a password or token value. Memories never change, so a secret would stay there for ever. Save the fact without the value, like \"the deploy token is in the DEPLOY_TOKEN variable\"."
+ },
+ {
+  "text": [
+   "client_secret => ",
+   "",
+   "owHEID0OEFF039naYDy1"
+  ],
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory seems to hold a password or token value. Memories never change, so a secret would stay there for ever. Save the fact without the value, like \"the deploy token is in the DEPLOY_TOKEN variable\"."
+ },
+ {
+  "text": [
+   "deploy with gh\u200b",
+   "p_",
+   "H0gxelIzzC2M0gbCafNbfCSYOEgHb4lknSTO"
+  ],
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory seems to hold a GitHub token. Memories never change, so a secret would stay there for ever. Save the fact without the value, like \"the deploy token is in the DEPLOY_TOKEN variable\"."
+ },
+ {
+  "text": [
+   "deploy with ",
+   "\uff47\uff48\uff50_",
+   "RQy3vXZD6B6Kn2SAtTmxmCFkH2E2jSnIOE5l"
+  ],
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory seems to hold a GitHub token. Memories never change, so a secret would stay there for ever. Save the fact without the value, like \"the deploy token is in the DEPLOY_TOKEN variable\"."
+ },
+ {
+  "text": "VIS-346 vis staging @7abdac4: the deploy works again after the cache fix.",
+  "what": "memory",
+  "language": "",
+  "problem": null
+ },
+ {
+  "text": "PROJ-123: prod gateway at gateway.example.com uses port 8443.",
+  "what": "memory",
+  "language": "",
+  "problem": null
+ },
+ {
+  "text": "Use Bearer tokens in the Authorization header for the HTTP API.",
+  "what": "memory",
+  "language": "",
+  "problem": null
+ },
+ {
+  "text": "Bearer abc and Basic auth are words here.",
+  "what": "memory",
+  "language": "",
+  "problem": null
+ },
+ {
+  "text": "The deploy token is in the DEPLOY_TOKEN variable, read as ${DEPLOY_TOKEN}.",
+  "what": "memory",
+  "language": "",
+  "problem": null
+ },
+ {
+  "text": "password=${DB_PASSWORD} in compose.yml, set from the vault.",
+  "what": "memory",
+  "language": "",
+  "problem": null
+ },
+ {
+  "text": "password=<your password> and token={{ secret }} are templates.",
+  "what": "memory",
+  "language": "",
+  "problem": null
+ },
+ {
+  "text": "password=changeme and token=redacted are placeholders.",
+  "what": "memory",
+  "language": "",
+  "problem": null
+ },
+ {
+  "text": "password=******** is masked in the log.",
+  "what": "memory",
+  "language": "",
+  "problem": null
+ },
+ {
+  "text": "api_key=os.environ['OPENAI_API_KEY'] in settings.py.",
+  "what": "memory",
+  "language": "",
+  "problem": null
+ },
+ {
+  "text": "Connect with postgres://localhost:5432/app, no password locally.",
+  "what": "memory",
+  "language": "",
+  "problem": null
+ },
+ {
+  "text": "postgres://user:<password>@host/db is the URL format.",
+  "what": "memory",
+  "language": "",
+  "problem": null
+ },
+ {
+  "text": "postgres://user:password@host/db and redis://u:$REDIS_PASS@host are examples.",
+  "what": "memory",
+  "language": "",
+  "problem": null
+ },
+ {
+  "text": "scikit-learn is imported as sklearn, see the sk-learn docs.",
+  "what": "memory",
+  "language": "",
+  "problem": null
+ },
+ {
+  "text": "max_tokens: 4096 is the default output limit.",
+  "what": "memory",
+  "language": "",
+  "problem": null
+ },
+ {
+  "text": "Commit 9b39d851f81af9d5d126265a530e6974a871416a added the cache.",
+  "what": "memory",
+  "language": "",
+  "problem": null
+ },
+ {
+  "text": "Session 81fce447-fc35-42ab-90c7-d3cd0dd0b1fd ran the end-to-end checks.",
+  "what": "memory",
+  "language": "",
+  "problem": null
+ },
+ {
+  "text": "AWS keys start with AKIA; rotate them every 90 days.",
+  "what": "memory",
+  "language": "",
+  "problem": null
+ },
+ {
+  "text": "token: required in the request body.",
+  "what": "memory",
+  "language": "",
+  "problem": null
+ },
+ {
+  "text": "Passwords live in 1Password; never paste them into a chat.",
+  "what": "memory",
+  "language": "",
+  "problem": null
+ },
+ {
+  "text": "Basic auth is off on staging; clone with https://git@github.com/org/repo.git.",
+  "what": "memory",
+  "language": "",
+  "problem": null
+ },
+ {
+  "text": "The bot pushes as ssh://deploy-bot-account-01@host.",
+  "what": "memory",
+  "language": "",
+  "problem": null
+ },
+ {
+  "text": "Za\u017c\u00f3\u0142\u0107 g\u0119\u015bl\u0105 ja\u017a\u0144: has\u0142o=Wiosna jest w sejfie.",
+  "what": "memory",
+  "language": "",
+  "problem": null
+ },
+ {
+  "text": "what the fuck is this build",
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory has profanity. Write it again in professional language."
+ },
+ {
+  "text": "MOTHERFUCKER of a bug",
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory has profanity. Write it again in professional language."
+ },
+ {
+  "text": "the f*cking test fails",
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory has profanity. Write it again in professional language."
+ },
+ {
+  "text": "this is bullshit",
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory has profanity. Write it again in professional language."
+ },
+ {
+  "text": "oh sh!t, the cache",
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory has profanity. Write it again in professional language."
+ },
+ {
+  "text": "the bitches of the old API",
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory has profanity. Write it again in professional language."
+ },
+ {
+  "text": "a wanker wrote this",
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory has profanity. Write it again in professional language."
+ },
+ {
+  "text": "kurwa, the cache is broken",
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory has profanity. Write it again in professional language."
+ },
+ {
+  "text": "spierdalaj from main",
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory has profanity. Write it again in professional language."
+ },
+ {
+  "text": "zajebisty wynik",
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory has profanity. Write it again in professional language."
+ },
+ {
+  "text": "to jest chujowe",
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory has profanity. Write it again in professional language."
+ },
+ {
+  "text": "huj z tym",
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory has profanity. Write it again in professional language."
+ },
+ {
+  "text": "kutasy z dzia\u0142u",
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory has profanity. Write it again in professional language."
+ },
+ {
+  "text": "ta cipa",
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory has profanity. Write it again in professional language."
+ },
+ {
+  "text": "dziwka",
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory has profanity. Write it again in professional language."
+ },
+ {
+  "text": "ku\u00adrwa with a soft hyphen",
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory has profanity. Write it again in professional language."
+ },
+ {
+  "text": "\uff46\uff55\uff43\uff4b in full width",
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory has profanity. Write it again in professional language."
+ },
+ {
+  "text": "b\u0131tch with a dotless i",
+  "what": "memory",
+  "language": "",
+  "problem": "Not saved: the memory has profanity. Write it again in professional language."
+ },
+ {
+  "text": "Scunthorpe, the Wankel engine, Hujiang and a classic assumption are fine.",
+  "what": "memory",
+  "language": "",
+  "problem": null
+ },
+ {
+  "text": "Use only AES-GCM cipher suites; skurcz means cramp in Polish.",
+  "what": "memory",
+  "language": "",
+  "problem": null
+ },
+ {
+  "text": "The cockpit, the Dickens novel and the Assam tea are fine.",
+  "what": "memory",
+  "language": "",
+  "problem": null
+ },
+ {
+  "text": "Cipher, cipka-free code and the city of Hujiang.",
+  "what": "memory",
+  "language": "",
+  "problem": null
+ },
+ {
+  "text": "Sussex, Essex and Middlesex are counties.",
+  "what": "memory",
+  "language": "",
+  "problem": null
+ },
+ {
+  "text": [
+   "push with ",
+   "ghp_",
+   "qC2juJLn1IJSYQycRcoojF6RCdHBkH136Fe4"
+  ],
+  "what": "summary",
+  "language": "",
+  "problem": "Not saved: the summary seems to hold a GitHub token. Memories never change, so a secret would stay there for ever. Save the fact without the value, like \"the deploy token is in the DEPLOY_TOKEN variable\"."
+ },
+ {
+  "text": "what the fuck is this build",
+  "what": "summary",
+  "language": "",
+  "problem": "Not saved: the summary has profanity. Write it again in professional language."
+ },
+ {
+  "text": "To jest bardzo wa\u017cna informacja o tym, jak dzia\u0142a nasz system.",
+  "what": "memory",
+  "language": "en",
+  "problem": "Not saved: the memory seems to be in Polish, and this memory keeps English only. Write it again in English."
+ },
+ {
+  "text": "Deploy idzie przez staging, potem prod.",
+  "what": "memory",
+  "language": "en",
+  "problem": "Not saved: the memory seems to be in Polish, and this memory keeps English only. Write it again in English."
+ },
+ {
+  "text": "Wdro\u017cenie dzia\u0142a po naprawie pami\u0119ci podr\u0119cznej.",
+  "what": "memory",
+  "language": "en",
+  "problem": "Not saved: the memory seems to be in Polish, and this memory keeps English only. Write it again in English."
+ },
+ {
+  "text": "The deploy works again after the cache fix on staging.",
+  "what": "memory",
+  "language": "pl",
+  "problem": "Not saved: the memory seems to be in English, and this memory keeps Polish only. Write it again in Polish."
+ },
+ {
+  "text": "The deploy works again after the cache fix on staging.",
+  "what": "memory",
+  "language": "en",
+  "problem": null
+ },
+ {
+  "text": "Wdro\u017cenie dzia\u0142a ponownie po naprawie cache na stagingu.",
+  "what": "memory",
+  "language": "pl",
+  "problem": null
+ },
+ {
+  "text": "Das ist der neue Server, und er l\u00e4uft nicht mit der alten Version.",
+  "what": "memory",
+  "language": "en",
+  "problem": "Not saved: the memory seems to be in German, and this memory keeps English only. Write it again in English."
+ },
+ {
+  "text": "Das ist der neue Server, und er l\u00e4uft nicht mit der alten Version.",
+  "what": "memory",
+  "language": "de",
+  "problem": null
+ },
+ {
+  "text": "The server runs with the old version of the API.",
+  "what": "memory",
+  "language": "de",
+  "problem": "Not saved: the memory seems to be in English, and this memory keeps German only. Write it again in German."
+ },
+ {
+  "text": "Le serveur est dans la salle avec les autres machines.",
+  "what": "memory",
+  "language": "en",
+  "problem": "Not saved: the memory seems to be in French, and this memory keeps English only. Write it again in English."
+ },
+ {
+  "text": "Le serveur est dans la salle avec les autres machines.",
+  "what": "memory",
+  "language": "fr",
+  "problem": null
+ },
+ {
+  "text": "El servidor est\u00e1 en la sala con las otras m\u00e1quinas tambi\u00e9n.",
+  "what": "memory",
+  "language": "en",
+  "problem": "Not saved: the memory seems to be in Spanish, and this memory keeps English only. Write it again in English."
+ },
+ {
+  "text": "El servidor est\u00e1 en la sala con las otras m\u00e1quinas tambi\u00e9n.",
+  "what": "memory",
+  "language": "es",
+  "problem": null
+ },
+ {
+  "text": "\u00bfD\u00f3nde est\u00e1 el servidor de producci\u00f3n ahora?",
+  "what": "memory",
+  "language": "es",
+  "problem": null
+ },
+ {
+  "text": "Il server \u00e8 nella sala con le altre macchine, non qui.",
+  "what": "memory",
+  "language": "en",
+  "problem": "Not saved: the memory seems to be in French, and this memory keeps English only. Write it again in English."
+ },
+ {
+  "text": "O servidor n\u00e3o est\u00e1 na sala com as outras m\u00e1quinas.",
+  "what": "memory",
+  "language": "en",
+  "problem": "Not saved: the memory seems to be in Portuguese, and this memory keeps English only. Write it again in English."
+ },
+ {
+  "text": "Het is een server van de klant en niet van ons.",
+  "what": "memory",
+  "language": "en",
+  "problem": "Not saved: the memory seems to be in Dutch, and this memory keeps English only. Write it again in English."
+ },
+ {
+  "text": "Jan Kowalski, \u0141\u00f3d\u017a, Gda\u0144sk, Krak\u00f3w.",
+  "what": "memory",
+  "language": "en",
+  "problem": null
+ },
+ {
+  "text": "Pawe\u0142 \u017b\u00f3\u0142kiewski owns the \u0141\u00f3d\u017a gateway.",
+  "what": "memory",
+  "language": "en",
+  "problem": null
+ },
+ {
+  "text": "PROJ-12 \u0105\u0107\u0119\u0142\u0144\u015b\u017a\u017c-cache v2.1 @7abdac4.",
+  "what": "memory",
+  "language": "en",
+  "problem": null
+ },
+ {
+  "text": "\u0142\u00f3d\u017a gda\u0144sk krak\u00f3w",
+  "what": "memory",
+  "language": "en",
+  "problem": null
+ },
+ {
+  "text": "W\u00fcrzburg M\u00fcnchen K\u00f6ln D\u00fcsseldorf Stra\u00dfe.",
+  "what": "memory",
+  "language": "en",
+  "problem": null
+ },
+ {
+  "text": "deploy\u00a0staging\u00a0prod\u00a0cache works",
+  "what": "memory",
+  "language": "en",
+  "problem": null
+ },
+ {
+  "text": "To jest\u00a0test\u00a0kt\u00f3ry\u00a0dzia\u0142a.",
+  "what": "memory",
+  "language": "en",
+  "problem": "Not saved: the memory seems to be in Polish, and this memory keeps English only. Write it again in English."
+ },
+ {
+  "text": "The deploy works.",
+  "what": "memory",
+  "language": "PL",
+  "problem": null
+ },
+ {
+  "text": " en ",
+  "what": "memory",
+  "language": "  en ",
+  "problem": null
+ },
+ {
+  "text": "Zostaw cache, on dzia\u0142a po restarcie serwera.",
+  "what": "summary",
+  "language": "en",
+  "problem": "Not saved: the summary seems to be in Polish, and this memory keeps English only. Write it again in English."
+ },
+ {
+  "text": "gdzie jest ten serwer i jak go uruchomi\u0107",
+  "what": "search text",
+  "language": "en",
+  "problem": "Not searched: the search text seems to be in Polish, and this memory keeps English only. Write it again in English."
+ },
+ {
+  "text": "where is the staging server",
+  "what": "search text",
+  "language": "en",
+  "problem": null
+ },
+ {
+  "text": [
+   "push with ",
+   "ghp_",
+   "qC2juJLn1IJSYQycRcoojF6RCdHBkH136Fe4"
+  ],
+  "what": "search text",
+  "language": "en",
+  "problem": null
+ },
+ {
+  "text": "kurwa cache",
+  "what": "search text",
+  "language": "",
+  "problem": null
+ },
+ {
+  "text": "The deploy works.",
+  "what": "memory",
+  "language": "xx",
+  "problem": "Unknown memory language 'xx'. Use one of: en, pl, de, fr, es, it, pt, nl."
+ },
+ {
+  "text": "The deploy works.",
+  "what": "memory",
+  "language": "Klingon",
+  "problem": "Unknown memory language 'Klingon'. Use one of: en, pl, de, fr, es, it, pt, nl."
+ },
+ {
+  "text": "It's fine.",
+  "what": "memory",
+  "language": "it's",
+  "problem": "Unknown memory language \"it's\". Use one of: en, pl, de, fr, es, it, pt, nl."
+ },
+ {
+  "text": "  The deploy works.  ",
+  "what": "memory",
+  "language": "",
+  "limit": 40,
+  "problem": null
+ },
+ {
+  "text": "Za\u017c\u00f3\u0142\u0107 g\u0119\u015bl\u0105 ja\u017a\u0144",
+  "what": "memory",
+  "language": "",
+  "limit": 17,
+  "problem": "The memory is too long: 26 bytes, and the limit is 17. Letters with accents use 2 bytes. Make it shorter."
+ },
+ {
+  "text": "Za\u017c\u00f3\u0142\u0107 g\u0119\u015bl\u0105 ja\u017a\u0144",
+  "what": "memory",
+  "language": "",
+  "limit": 26,
+  "problem": null
+ },
+ {
+  "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "what": "summary",
+  "language": "",
+  "limit": 40,
+  "problem": "The summary is too long: 41 bytes, and the limit is 40. Letters with accents use 2 bytes. Make it shorter."
+ },
+ {
+  "text": "   ",
+  "what": "memory",
+  "language": "",
+  "limit": 40,
+  "problem": "The memory is empty. Write one line of text."
+ },
+ {
+  "text": "one\ntwo\r\nthree\rfour",
+  "what": "memory",
+  "language": "",
+  "limit": 40,
+  "problem": "The memory has 4 lines. Write one line: merge them, or save them one by one."
+ },
+ {
+  "text": "one\u2028two",
+  "what": "memory",
+  "language": "",
+  "limit": 40,
+  "problem": null
+ },
+ {
+  "text": "one\u001ctwo\u0085three",
+  "what": "memory",
+  "language": "",
+  "limit": 40,
+  "problem": null
+ },
+ {
+  "text": "one\u000btwo",
+  "what": "memory",
+  "language": "",
+  "limit": 40,
+  "problem": null
+ },
+ {
+  "text": [
+   "kurwa",
+   " cache"
+  ],
+  "what": "memory",
+  "language": "",
+  "limit": 40,
+  "problem": "Not saved: the memory has profanity. Write it again in professional language."
+ },
+ {
+  "text": [
+   "push with ",
+   "ghp_",
+   "qC2juJLn1IJSYQycRcoojF6RCdHBkH136Fe4"
+  ],
+  "what": "memory",
+  "language": "",
+  "limit": 340,
+  "problem": "Not saved: the memory seems to hold a GitHub token. Memories never change, so a secret would stay there for ever. Save the fact without the value, like \"the deploy token is in the DEPLOY_TOKEN variable\"."
+ },
+ {
+  "text": "a\udc80b",
+  "what": "memory",
+  "language": "",
+  "limit": 40,
+  "problem": "'utf-8' codec can't encode character '\\udc80' in position 1: surrogates not allowed"
+ }
+]

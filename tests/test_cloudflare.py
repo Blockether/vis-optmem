@@ -79,3 +79,31 @@ def test_the_worker_refuses_a_wrong_token_and_a_bad_pattern():
     memory.create()
     with pytest.raises(ValueError, match="not a valid regular expression"):
         memory.matches("(unclosed", 5)
+
+
+def test_notes_of_one_fact_at_the_same_time_save_it_once():
+    memory = store()
+    memory.create()
+    with ThreadPoolExecutor(8) as pool:
+        results = list(
+            pool.map(
+                lambda _: memory.note("2026-10-12", "The cache warms up at 06:00 UTC."),
+                range(8),
+            )
+        )
+    assert memory.count() == 1
+    assert sorted(is_new for _, is_new in results) == [False] * 7 + [True]
+
+
+def test_the_worker_refuses_what_memo_refuses():
+    memory = store()
+    memory.create()
+    token = "ghp_" + "a1B2c3D4e5" * 4
+    with pytest.raises(ValueError, match="GitHub token") as refused:
+        memory.append([("2026-10-12", f"The token is {token}")])
+    assert token not in str(refused.value)
+    with pytest.raises(ValueError, match="limit is 340"):
+        memory.note("2026-10-12", "x" * 341)
+    with pytest.raises(ValueError, match="profanity"):
+        memory.put_summary(0, 2, "This shit works.")
+    assert memory.count() == 0

@@ -13,6 +13,8 @@ operation with its arguments.
 
 ``answer`` runs one request on a ``MemoryStore``. ``lambda_response`` serves an AWS
 Lambda function URL with it. So a service implements only a ``MemoryStore``.
+``answer`` also refuses a memory, a summary or a search that ``Memo`` refuses: a
+line that is too long, a secret, profanity, or another language than the memory keeps.
 """
 
 from __future__ import annotations
@@ -22,11 +24,13 @@ import hmac
 import json
 import logging
 import os
+import re
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from typing import Any
 
+from vis_optmem.guard import check_line, check_safe
 from vis_optmem.store import Entry, MemoryStore
 
 VERSION = 1
@@ -48,6 +52,7 @@ OPS: dict[str, tuple[tuple[str, str], ...]] = {
     "due_count": (("total", "int"),),
     "search": (("query", "str"), ("limit", "int")),
     "duplicate": (("text", "str"),),
+    "note": (("date", "date"), ("text", "str"), ("force", "bool")),
     "matches": (("pattern", "str"), ("newest", "int")),
 }
 """Every operation: the ``MemoryStore`` method of the same name and its arguments."""
@@ -163,6 +168,16 @@ class RemoteStore(MemoryStore):
         data = self.call("duplicate", text=text)
         return None if data is None else _entry(data)
 
+    def note(self, date: str, text: str, force: bool = False) -> tuple[Entry, bool]:
+        try:
+            entry, is_new = self.call("note", date=date, text=text, force=force)
+        except ValueError as error:
+            # A service from before the note op: check, then append, in two calls.
+            if not str(error).startswith("Unknown op 'note'"):
+                raise
+            return super().note(date, text, force)
+        return _entry(entry), bool(is_new)
+
     def matches(self, pattern: str, newest: int) -> tuple[int, list[Entry]]:
         total, entries = self.call("matches", pattern=pattern, newest=newest)
         return int(total), [_entry(data) for data in entries]
@@ -192,19 +207,32 @@ class RemoteStore(MemoryStore):
             yield from self.entries(lo, min(lo + 2048, total))
 
 
+def _is_date(value: Any) -> bool:
+    """A ``YYYY-MM-DD`` date. Other text can break the records of a file store."""
+    return (
+        isinstance(value, str)
+        and re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value) is not None
+    )
+
+
 def _check(kind: str, name: str, value: Any) -> Any:
     is_int = isinstance(value, int) and not isinstance(value, bool)
     if kind == "int?" and value is None:
         return None
     if kind in ("int", "int?") and is_int:
         return value
+    if kind == "bool" and isinstance(value, bool):
+        return value
     if kind == "str" and isinstance(value, str):
+        return value
+    if kind == "date" and _is_date(value):
         return value
     if kind == "items" and isinstance(value, list):
         if all(
             isinstance(item, list)
             and len(item) == 2
-            and all(isinstance(part, str) for part in item)
+            and _is_date(item[0])
+            and isinstance(item[1], str)
             for item in value
         ):
             return [tuple(item) for item in value]
@@ -222,6 +250,9 @@ def _result(op: str, value: Any) -> Any:
         return [_entry_data(entry) for entry in value]
     if op == "duplicate":
         return None if value is None else _entry_data(value)
+    if op == "note":
+        entry, is_new = value
+        return [_entry_data(entry), is_new]
     if op == "matches":
         total, entries = value
         return [total, [_entry_data(entry) for entry in entries]]
@@ -230,11 +261,32 @@ def _result(op: str, value: Any) -> Any:
     return value
 
 
+def _guard(op: str, args: Mapping[str, Any], store: MemoryStore, language: str) -> None:
+    """Refuse what ``Memo`` refuses, for a client that does not use ``Memo``."""
+    if op == "search":
+        check_safe(args["query"], what="search text", language=language)
+        return
+    texts = {
+        "append": [("memory", text) for _, text in args.get("items", ())],
+        "note": [("memory", args.get("text"))],
+        "put_summary": [("summary", args.get("text"))],
+    }.get(op)
+    if not texts:
+        return
+    limit = store.sizes()["ENTRY_CHARS"]
+    for what, text in texts:
+        if check_line(text, limit, what=what) != text:
+            raise ValueError(f"The {what} has outer whitespace. Remove it.")
+        check_safe(text, what=what, language=language)
+
+
 def answer(
-    request: Any, stores: Callable[[str], MemoryStore]
+    request: Any, stores: Callable[[str], MemoryStore], *, language: str = ""
 ) -> tuple[int, dict[str, Any]]:
     """Run one request on the store that ``stores(memory)`` gives. Return status and body.
 
+    Before a write or a search, refuse what ``Memo`` refuses. ``language`` is the
+    only language that the memories keep, like "en", or "" for any language.
     ``stores`` raises LookupError for a memory that the service does not keep.
     A store error becomes an error body: ValueError gives 400, LookupError and
     FileNotFoundError give 404, and any other error gives 500.
@@ -257,6 +309,7 @@ def answer(
             raise ValueError(f"{op} takes the arguments: {', '.join(names) or 'none'}.")
         checked = {name: _check(kind, name, args[name]) for name, kind in OPS[op]}
         store = stores(memory)
+        _guard(op, checked, store, language)
         return 200, {"result": _result(op, getattr(store, op)(**checked))}
     except ValueError as error:
         return 400, _failure("ValueError", error)
@@ -275,6 +328,8 @@ def lambda_response(
     event: Mapping[str, Any],
     stores: Callable[[str], MemoryStore],
     token: str,
+    *,
+    language: str = "",
 ) -> dict[str, Any]:
     """Serve one AWS Lambda function URL event with ``answer``.
 
@@ -300,7 +355,7 @@ def lambda_response(
             request = json.loads(raw)
         except ValueError:
             request = None
-        status, body = answer(request, stores)
+        status, body = answer(request, stores, language=language)
     return {
         "statusCode": status,
         "headers": {"Content-Type": "application/json"},

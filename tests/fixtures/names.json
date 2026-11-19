@@ -1,0 +1,106 @@
+{
+  "names": [
+    {
+      "text": "Postgres listens on port 5432.",
+      "names": [
+        "5432"
+      ]
+    },
+    {
+      "text": "Use uv, not Poetry, for Python projects.",
+      "names": [
+        "name:poetr",
+        "name:pytho"
+      ]
+    },
+    {
+      "text": "use uv not poetry for python projects",
+      "names": []
+    },
+    {
+      "text": "Deploy to staging via `bin/deploy` and DEPLOY_TOKEN, ask Ashley.",
+      "names": [
+        "bin/deploy",
+        "deploy_token",
+        "env:staging",
+        "name:ashle"
+      ]
+    },
+    {
+      "text": "The myVar flag in Kraków. Then Anna reviews it.",
+      "names": [
+        "myvar",
+        "name:anna",
+        "name:krako"
+      ]
+    },
+    {
+      "text": "Run --dry-run first (see README.md).",
+      "names": [
+        "--dry-run",
+        "readme.md"
+      ]
+    },
+    {
+      "text": "Karol mieszka w Krakowie z Ashley.",
+      "names": [
+        "name:ashle",
+        "name:krako"
+      ]
+    },
+    {
+      "text": "Prod uses Python 3.12; dev uses 3.11!",
+      "names": [
+        "3.11",
+        "3.12",
+        "env:dev",
+        "env:prod",
+        "name:pytho"
+      ]
+    },
+    {
+      "text": "\"Quoted\" start, then [Bracketed] Name.",
+      "names": [
+        "name:brack",
+        "name:name"
+      ]
+    }
+  ],
+  "same_names": [
+    {
+      "a": "Use uv, not Poetry, for Python projects.",
+      "b": "For Python projects use uv instead of Poetry.",
+      "same": true
+    },
+    {
+      "a": "Use uv, not Poetry, for Python projects.",
+      "b": "use uv not poetry for python projects",
+      "same": true
+    },
+    {
+      "a": "Postgres listens on port 5432.",
+      "b": "Postgres listens on port 5433.",
+      "same": false
+    },
+    {
+      "a": "Deploy on staging first.",
+      "b": "Deploy on production first.",
+      "same": false
+    },
+    {
+      "a": "User lives in Kraków.",
+      "b": "User lives in Krakow.",
+      "same": true
+    },
+    {
+      "a": "Ask Ashley about the release.",
+      "b": "Ask ashley about the release.",
+      "same": true
+    },
+    {
+      "a": "Python 3.12 is required.",
+      "b": "Python 3.12 is required!",
+      "same": true
+    }
+  ]
+}

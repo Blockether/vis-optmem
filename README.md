@@ -7,7 +7,8 @@ that your whole team shares.
 
 vis-optmem brings [OptMem](https://github.com/VictorTaelin/OptMem) by
 [Victor Taelin](https://github.com/VictorTaelin) to Vis as typed Python functions. It uses the same
-design and the same files. See [Credits](#credits).
+design and the same file layout, with wider records so that a memory holds 340 bytes. See
+[Credits](#credits).
 
 ## Install
 
@@ -23,7 +24,7 @@ session reads its memory before other work and saves new facts as it works.
 ```python
 memo.init()                          # create the memory folder
 memo.wake()                          # read the memory: new memories in full, old ones as summaries
-memo.note("The user prefers uv.")    # save one memory: one line of at most 280 bytes
+memo.note("The user prefers uv.")    # save one memory: one line of at most 340 bytes
 memo.nap("0-1", "<one line>")        # save a summary that a result asks for
 memo.recall(r"uv|poetry")            # search every memory with a regular expression
 memo.recall(about="Python packaging") # find related memories by meaning
@@ -68,15 +69,25 @@ lists in the project, group or session settings of Vis.
   original memories.
 - `memo.note()` refuses a fact that the memory already holds, because a saved memory never
   changes and `memo.forget()` drops only summaries. The store's `duplicate(text)` decides what a
-  repeat is. By default, a note is a repeat when it has the same numbers as one of the closest
-  memories from `search` and shares at least 60% of its words. The result shows that memory. To
-  save a different fact that looks similar, give `force=True`.
+  repeat is. By default, a note is a repeat when it has the same names as one of the closest
+  memories from `search` and shares at least 60% of its words. Names are numbers, paths, file
+  names, flags, camelCase and ALL-CAPS tokens, environment words and proper names
+  (`vis_optmem.names`). So "port 5432" and "port 5433", or staging and production, are different
+  facts. The result shows that memory. To save a different fact that looks similar, give
+  `force=True`. The store's `note()` checks and saves in one atomic step, so two sessions that note
+  one fact at the same time save it once.
 - `memo.note()`, `memo.nap()` and `memo.import_memories()` refuse a line that seems to hold a
   secret or has profanity, in every memory and every store. The secret rules find private keys,
   JSON Web Tokens, AWS, GitHub, GitLab, Slack, Google, OpenAI, Anthropic, Stripe, npm and Hugging
   Face tokens, `Bearer` and `Basic` values, tokens and passwords in URLs, and random values after
   words like `password=` or `token:`. The error names the kind of problem and does not repeat the
   value. `force=True` does not skip this check.
+- `MEMORY_LANGUAGE` (personal memory) and `MEMORY_TEAM_LANGUAGE` (team memory) give the only
+  language that a memory keeps: `en`, `pl`, `de`, `fr`, `es`, `it`, `pt` or `nl`. Then notes,
+  summaries and `about` searches in another language are refused. A short check of common words
+  decides; capitalized words count as names, so `Kraków` in an English note is allowed.
+- A memory or summary that is at most 2 bytes over `ENTRY_CHARS` is cut to the limit, and the
+  result shows the saved line. A longer line is refused.
 - The agent prompt asks for memories and searches in English and in professional language, with
   the task key, the environment, the repository and the short commit SHA when they apply.
 
@@ -95,7 +106,10 @@ environment:
 
 Each person then gets `<workspace>/memory`. An absolute path or a `~` path does not change.
 
-The files are the same as those of the OptMem `memo` command, so both tools can use one memory.
+The files have the layout of the OptMem `memo` command, with wider records: 384 bytes for a memory
+and 352 bytes for a summary, instead of 320 and 288. A folder with the OptMem
+widths makes its records wide. vis-optmem does it at the first use, so the OptMem `memo` command
+cannot read that folder after it.
 A lock file keeps the writes of all sessions and processes in order. Do not edit the files by hand.
 
 ## Personal and team memory
@@ -200,6 +214,10 @@ To build the service, implement a `MemoryStore` in it and serve it with
 `vis_optmem.remote.lambda_response(event, stores, token)`. The module docstring of
 `vis_optmem.remote` gives the protocol. `tests/test_remote.py` runs every memo tool through it.
 
+The service refuses what `memo` refuses, also from a client that does not use `memo`: a line
+that is too long, a secret, profanity, and with `language="en"` in `answer` or `lambda_response`,
+another language. The `note` operation checks for a repeat and saves in one step.
+
 ### Keep the memory in Cloudflare
 
 [`cloudflare/`](cloudflare/) is a complete memory service for Cloudflare Workers. It serves
@@ -250,9 +268,12 @@ Change these settings in `vars` of `cloudflare/wrangler.jsonc`:
 | `EMBEDDING_MODEL` | `@cf/baai/bge-m3` | Workers AI model; a change embeds every memory again    |
 | `SEARCH_MIN`      | `0.5`             | Lowest cosine that `memo.recall(about=...)` shows       |
 | `DUPLICATE_MIN`   | `0.85`            | Lowest cosine of a repeat that `memo.note()` refuses    |
+| `MEMORY_LANGUAGE` | (none)            | Only language of notes, summaries and searches, like `en` |
 
-The thresholds fit `bge-m3`. If you change the model, check them again with your own pairs of
-repeats and near misses.
+The Worker refuses the same lines as `memo`: too long, secrets, profanity and other languages.
+
+The thresholds fit `bge-m3`. If you change the model, check them again: see
+[Calibrate the thresholds](#calibrate-the-thresholds-for-a-new-embedding-model).
 
 Costs and limits:
 
@@ -270,6 +291,33 @@ store with the standard library: `sqlite3` for a local file, or `urllib.request`
 service, for example an API in front of your database.
 
 In Python, give the store directly: `Memo(store=MyStore(...))`.
+
+### A memory for many writers on many hosts
+
+`vis_optmem.shared.SharedStore` is a reference `MemoryStore` for a team memory that many sessions on many hosts write at the same time. Copy it or subclass it.
+
+It keeps the memory in a `Table`: sorted string keys, items as dicts, and one call `transact(puts, deletes, conditions)` that writes all or nothing. The conditions are `Absent(key)` and `Equals(key, field, value)`. Two tables come with the package:
+
+- `SqliteTable(path)`: one SQLite file that many processes share (`BEGIN IMMEDIATE`, busy timeout).
+- `MemoryTable()`: one process, for tests.
+
+`examples/dynamodb_store.py` gives a `Table` for Amazon DynamoDB (boto3, `TransactWriteItems`).
+
+```bash
+MEMORY_STORE=vis_optmem.shared:sqlite_store
+MEMORY_STORE_CONFIG={"path": "/shared/team-memory.db"}
+
+MEMORY_STORE=examples/dynamodb_store.py:dynamodb_store
+MEMORY_STORE_CONFIG={"table": "team-memory", "memory": "team"}
+```
+
+How it works:
+
+- Each instance keeps all memories in a cache. A memory never changes, so `sync()` reads only the memories after the cache, in one query.
+- A write gives the next ids, with the condition that those keys are absent. When another writer used them first, the store syncs, checks `note` for a repeat again, and tries again with new ids and a random wait. After 20 s it raises `WriteConflict`. So ids stay dense, and no write is lost or saved twice.
+- `put_summary` moves the level count and writes the summary in one transaction. `drop_summaries` lowers the counts and removes the summaries in one transaction.
+- `SharedStore(table, embed=fn)` searches by meaning. `fn` gives one vector for each text. A repeat needs a cosine of at least `duplicate_min` (0.85) and the same names (`names.same_names`). Each memory keeps its vector, so other instances do not embed it again.
+- `save_snapshot(path)` writes all memories to a JSON file. `SharedStore(table, snapshot=path)` starts from it and syncs only the newer memories.
 
 ## Search by meaning
 
@@ -308,6 +356,41 @@ class ServiceStore(MemoryStore):
         return None
 ```
 
+### Calibrate the thresholds for a new embedding model
+
+A store that compares embeddings uses two cosine thresholds:
+
+- `DUPLICATE_MIN` (0.85 for `@cf/baai/bge-m3`): `memo.note()` refuses a repeat at this cosine or more, when both lines also have the same names.
+- `SEARCH_MIN` (0.5 for `@cf/baai/bge-m3`): `memo.recall(about=...)` shows a memory at this cosine or more.
+
+Each model gives other cosines. When you change the model, choose both thresholds again. `vis_optmem.calibrate` chooses them from labelled pairs of texts. Each pair has a kind:
+
+| Kind        | The thresholds must                                  |
+|-------------|------------------------------------------------------|
+| `repeat`    | find the repeat (same fact, other words or language) |
+| `different` | not find a repeat (near fact: other port, person)    |
+| `related`   | let a search for `a` find `b`                        |
+| `unrelated` | not let a search for `a` find `b`                    |
+
+The package has 48 default pairs in English and Polish. Put pairs from your own memory in a JSON lines file, one `{"a": ..., "b": ..., "kind": ...}` on each line. `embed` takes a list of texts and returns one vector for each text.
+
+```bash
+# Choose the thresholds. Each one is in the middle of the gap between its two kinds.
+python -m vis_optmem.calibrate --embed my_service.embeddings:embed
+# Check your thresholds against your pairs. The exit code is 1 when a pair is wrong.
+python -m vis_optmem.calibrate pairs.jsonl --embed my_service.embeddings:embed \
+    --duplicate-min 0.85 --search-min 0.5
+```
+
+The JSON output gives the thresholds, the margins and the pairs that no threshold separates. A negative margin means that the kinds overlap. Add a test, so that a model or threshold change fails at once:
+
+```python
+from vis_optmem.calibrate import DEFAULT_PAIRS, check
+
+def test_thresholds_still_separate_the_pairs():
+    assert not check(embed, DEFAULT_PAIRS, duplicate_min=0.85, search_min=0.5)
+```
+
 ## Sizes
 
 Change a size with `memo.config({"NAME": value})`. Use `None` as the value to go back to the
@@ -316,7 +399,7 @@ default.
 | Name          | Default | Meaning                                           |
 |---------------|---------|---------------------------------------------------|
 | `WAKE_LINES`  | 96      | Lines that `memo.wake()` shows                    |
-| `ENTRY_CHARS` | 280     | Longest memory or summary, in bytes (at most 280) |
+| `ENTRY_CHARS` | 340     | Longest memory or summary, in bytes (at most 344) |
 | `PART_CHARS`  | 20000   | Largest part of one result, in bytes              |
 | `PART_LINES`  | 500     | Largest part of one result, in lines              |
 
