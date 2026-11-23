@@ -48,9 +48,23 @@ jobs:
             echo "Tag $GITHUB_REF_NAME does not match the extension version $declared." >&2
             exit 1
           fi
-      # The extension center publishes this release automatically: Blockether/vis runs
-      # "Publish reviewed extension" daily for first-party extensions, and that workflow
-      # can also be dispatched by hand for an immediate publication.
       - uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
+
+      # Start the publication in the Vis Extension Center at once. The schedule in Blockether/vis
+      # also publishes this release, but GitHub starts scheduled runs some hours late.
+      - name: Publish the release in the Vis Extension Center
+        env:
+          GH_TOKEN: ${{ secrets.VIS_EXTENSION_PUBLISH_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::Set the VIS_EXTENSION_PUBLISH_TOKEN secret. Without it, the schedule in Blockether/vis publishes this release some hours later."
+            exit 0
+          fi
+          gh workflow run extension-publish.yml --repo Blockether/vis \
+            -f repository_url="https://github.com/$GITHUB_REPOSITORY" \
+            -f subdirectory="" \
+            -f release_tag="$GITHUB_REF_NAME" \
+            -f revision="$GITHUB_SHA"
