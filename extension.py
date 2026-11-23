@@ -8,33 +8,20 @@ from vis_optmem.store import SIZES
 CONTENT_LIMIT = 4000
 DEFAULT_LIMIT = next(size.default for size in SIZES if size.name == "ENTRY_CHARS")
 
-PROMPT = """memo surface active: permanent memory that lasts across sessions, in two memories.
-- "personal", the default: your own memory. Facts about the user, preferences and project details.
+PROMPT = """Memo decisions. Never edit memory files. Print each result.text and follow it.
+START: If session["agent"]["role"] == "subagent", stop. Do not use memo. Otherwise run print((await memo.wake()).text) before work. Follow Next until awake. Never wake team memory.
+PLAN or choose tools: search first. Example: memo.recall(r"postgres|migration", about="change a database schema safely", scope="all").
+NEW lasting fact: Check `callable(getattr(memo, "note", None))`. If false, do not save new facts or bypass the limit. Otherwise choose one memory:
+- Personal by default: memo.note(memory) for user facts, preferences, project decisions and results.
 {team}
-Each tool takes scope="personal" (the default) or scope="team". memo.recall also takes scope="all": it searches both memories, and each line starts with its memory, like [team].
-  memo.wake(part=1, at=None)              read a memory
-  memo.note(memory)                       save one fact: one line of at most {limit} bytes
-  memo.nap(block, summary)                save a summary that a result asks for
-  memo.recall(pattern=None, about=None)   search: pattern is a regex, about is plain words matched by meaning; give one or both
-  memo.zoom(block)                        open a summary into its two halves
-  memo.forget(block)                      drop a wrong summary; memo asks for it again
-Each result has a `text` field. Print it and do what it says. apropos(r"^memo\\.") lists the other tools.
-- At the start of each session, before other work, read your memory: print((await memo.wake()).text). Run each "Next:" call that a result gives until a result says "You are awake." Do not read the team memory with memo.wake: search it.
-- Before you plan a task or choose a tool, search both memories in one call, for example memo.recall(r"postgres|migration", about="change a database schema safely", scope="all").
-- Before you save a fact, check `callable(getattr(memo, "note", None))` in the session sandbox. If it is false, do not save new facts in either memory. Do not use another tool or edit the files to bypass this limit.
-- If the store refuses a write because it is read-only, use it only for searches and reads. Do not retry the write or save the fact in a different memory.
-- When the tool and the store allow writes, save each new fact of lasting value when you learn it: decisions, results of real work, what the user teaches you, facts about the user's life, events with lasting effect.
-- Save to scope="team" only general knowledge that stays useful in other projects and that every person may read. Write it so that it stands alone and a search finds it: name the technology, the problem and the solution in plain words, without local paths or session details.
-- Save each fact once, in one memory. Memories never change and memo.forget drops only summaries, so memo.note refuses a fact that a memory already says. Then save only what is new. Give force=True only for a different fact.
-- Never save passwords, keys, tokens or other secrets in either memory. memo.note and memo.nap refuse a line that looks like a secret or has profanity: save the fact without the value.
-- Write every memory, summary and search in English and in professional language, whatever language the user uses. First translate memory, summary, pattern and about.
-- Give each memory its work context when it applies: the task key, the environment, the repository and the short commit SHA (7 characters), like "PROJ-123 prod vis @7abdac4: the deploy works again after the cache fix."
-- When a result asks for a summary, save it with the call in that result, before your next action. session["memo"]["personal"]["summaries_due"] counts the summaries that are due.
-- If session["agent"]["role"] is "subagent", do not use memo.
-- Do not change the memory files yourself. memo owns them."""
+WRITE: One fact once, one line of at most {limit} bytes. For work, include the task key, the environment, the repository and the short commit SHA (7 characters) when applicable. On a duplicate, save only new information. Use force=True only for a different fact.
+READ-ONLY: If the store refuses a write as read-only, read or search only. Do not retry or redirect the write.
+SUMMARY due: Run the requested memo.nap call before other work.
+ALWAYS: Write in English and in professional language: translate memory, summary, pattern and about. Never save secrets. memo.note and memo.nap refuse a line that looks like a secret or has profanity. Omit the value.
+Other tools: apropos(r"^memo\\.")."""
 
-TEAM_SET = '- "team": one memory that the whole team shares. Search it. When the tool and the store allow writes, use memo.note(memory, scope="team") for general knowledge that stays useful in other projects, such as best practices, reusable solutions, pitfalls with their fixes and team conventions.'
-TEAM_UNSET = '- "team": no team memory is set, so use only the personal memory.'
+TEAM_SET = '- Team: memo.note(memory, scope="team") only for general knowledge that stays useful in other projects and is safe for everyone. Name the technology, problem and fix. Omit local paths and session details.'
+TEAM_UNSET = '- "team": no team memory is set. Use personal only.'
 
 
 def _count(number, one, many):
@@ -214,7 +201,7 @@ vis.register_extension(
             "Permanent memory for agents: a personal memory for every session on this "
             "machine, and a team memory that agents search and add to. Based on OptMem by Victor Taelin."
         ),
-        version="0.7.2",
+        version="0.7.3",
         alias="memo",
         symbols=[vis.Symbol(Memo(base=vis.workspace_root), name="memo")],
         prompt=_prompt,
