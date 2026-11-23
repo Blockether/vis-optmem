@@ -21,7 +21,9 @@ Each tool takes scope="personal" (the default) or scope="team". memo.recall also
 Each result has a `text` field. Print it and do what it says. apropos(r"^memo\\.") lists the other tools.
 - At the start of each session, before other work, read your memory: print((await memo.wake()).text). Run each "Next:" call that a result gives until a result says "You are awake." Do not read the team memory with memo.wake: search it.
 - Before you plan a task or choose a tool, search both memories in one call, for example memo.recall(r"postgres|migration", about="change a database schema safely", scope="all").
-- Save each new fact of lasting value when you learn it: decisions, results of real work, what the user teaches you, facts about the user's life, events with lasting effect.
+- Before you save a fact, check `callable(getattr(memo, "note", None))` in the session sandbox. If it is false, do not save new facts in either memory. Do not use another tool or edit the files to bypass this limit.
+- If the store refuses a write because it is read-only, use it only for searches and reads. Do not retry the write or save the fact in a different memory.
+- When the tool and the store allow writes, save each new fact of lasting value when you learn it: decisions, results of real work, what the user teaches you, facts about the user's life, events with lasting effect.
 - Save to scope="team" only general knowledge that stays useful in other projects and that every person may read. Write it so that it stands alone and a search finds it: name the technology, the problem and the solution in plain words, without local paths or session details.
 - Save each fact once, in one memory. Memories never change and memo.forget drops only summaries, so memo.note refuses a fact that a memory already says. Then save only what is new. Give force=True only for a different fact.
 - Never save passwords, keys, tokens or other secrets in either memory. memo.note and memo.nap refuse a line that looks like a secret or has profanity: save the fact without the value.
@@ -31,7 +33,7 @@ Each result has a `text` field. Print it and do what it says. apropos(r"^memo\\.
 - If session["agent"]["role"] is "subagent", do not use memo.
 - Do not change the memory files yourself. memo owns them."""
 
-TEAM_SET = '- "team": one memory that the whole team shares. Search it, and save to it with memo.note(memory, scope="team"): general knowledge that stays useful in other projects, such as best practices, reusable solutions, pitfalls with their fixes and team conventions.'
+TEAM_SET = '- "team": one memory that the whole team shares. Search it. When the tool and the store allow writes, use memo.note(memory, scope="team") for general knowledge that stays useful in other projects, such as best practices, reusable solutions, pitfalls with their fixes and team conventions.'
 TEAM_UNSET = '- "team": no team memory is set, so use only the personal memory.'
 
 
@@ -212,7 +214,7 @@ vis.register_extension(
             "Permanent memory for agents: a personal memory for every session on this "
             "machine, and a team memory that agents search and add to. Based on OptMem by Victor Taelin."
         ),
-        version="0.7.1",
+        version="0.7.2",
         alias="memo",
         symbols=[vis.Symbol(Memo(base=vis.workspace_root), name="memo")],
         prompt=_prompt,

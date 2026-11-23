@@ -288,8 +288,19 @@ def test_the_prompt_lets_the_agent_save_to_a_set_team_memory(
     assert 'scope="team")' not in unset
     monkeypatch.setenv("MEMORY_TEAM_DIR", str(tmp_path / "team"))
     team = registered.prompt({})
-    assert "search only" not in team
-    assert 'Search it, and save to it with memo.note(memory, scope="team")' in team
+    assert 'memo.note(memory, scope="team")' in team
+    # Use the actual capability check in the instructions. A disabled method is
+    # absent from the session sandbox, even if the team store is configured.
+    import re
+
+    check = re.search(r'`(callable\(getattr\(memo, "note", None\)\))`', team)
+    assert check is not None
+    from types import SimpleNamespace
+
+    assert eval(check[1], {"memo": SimpleNamespace(note=lambda: None)})
+    assert not eval(check[1], {"memo": SimpleNamespace()})
+    assert "do not save new facts" in team
+    assert "If the store refuses a write" in team
 
 
 def test_the_prompt_asks_for_safe_english_memories_with_context(registered, memo):
