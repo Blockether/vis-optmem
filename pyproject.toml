@@ -12,6 +12,9 @@ dependencies = [
 Source = "https://github.com/Blockether/vis-optmem"
 OptMem = "https://github.com/VictorTaelin/OptMem"
 
+[tool.uv]
+default-groups = []
+
 [dependency-groups]
 dev = ["pytest>=9", "ruff>=0.14"]
 

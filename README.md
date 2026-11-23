@@ -44,5 +44,5 @@ Use [`memo.config`](docs/memory.md#sizes) to set `WAKE_LINES`, `ENTRY_CHARS`, `P
 ## Development
 
 ```bash
-vis-agent python -m pytest tests -q
+uv run --group dev pytest tests -q
 ```

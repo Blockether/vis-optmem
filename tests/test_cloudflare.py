@@ -6,7 +6,7 @@ Start the Worker with a token and every memory name, then give its URL and token
     printf 'MEMORY_STORE_TOKEN=<token>\nMEMORIES=*\n' > .dev.vars
     npx wrangler dev
     MEMORY_SERVICE_URL=http://localhost:8787/ MEMORY_STORE_TOKEN=<token> \
-      vis-agent python -m pytest tests/test_cloudflare.py -q
+      uv run --group dev pytest tests/test_cloudflare.py -q
 
 Without MEMORY_SERVICE_URL, the tests are skipped. The Worker embeds each memory
 with Workers AI, so a run makes a few hundred small Workers AI calls.

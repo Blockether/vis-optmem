@@ -12,4 +12,4 @@ Permanent agent memory in the OptMem format, as typed Python functions for Vis.
 - Every result has a `text` field that tells the agent the next step. Keep each `text` within one Vis print.
 - Give every exported method an explicit Activity presentation with a capitalized English label. Test the success, failure and empty states.
 - Do not copy code or text from OptMem: it has no license. Credit Victor Taelin in the README, the NOTICE and the extension description.
-- Format and lint with ruff. Run tests with `vis-agent python -m pytest tests -q`.
+- Format and lint with ruff. Run tests with `uv run --group dev pytest tests -q`.
