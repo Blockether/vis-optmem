@@ -28,7 +28,6 @@ Each result has a `text` field. Print it and do what it says. apropos(r"^memo\\.
 - Write every memory, summary and search in English and in professional language, whatever language the user uses. First translate memory, summary, pattern and about.
 - Give each memory its work context when it applies: the task key, the environment, the repository and the short commit SHA (7 characters), like "PROJ-123 prod vis @7abdac4: the deploy works again after the cache fix."
 - When a result asks for a summary, save it with the call in that result, before your next action. session["memo"]["personal"]["summaries_due"] counts the summaries that are due.
-- If session["agent"]["role"] is "subagent", do not use memo.
 - Do not change the memory files yourself. memo owns them."""
 
 TEAM_SET = '- "team": one memory that the whole team shares. Search it, and save to it with memo.note(memory, scope="team"): general knowledge that stays useful in other projects, such as best practices, reusable solutions, pitfalls with their fixes and team conventions.'
@@ -216,6 +215,7 @@ vis.register_extension(
         alias="memo",
         symbols=[vis.Symbol(Memo(base=vis.workspace_root), name="memo")],
         prompt=_prompt,
+        prompt_audience="leader",
         ctx=_ctx,
         env=[
             "MEMORY_DIR",
