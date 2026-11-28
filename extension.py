@@ -201,7 +201,7 @@ vis.register_extension(
             "Permanent memory for agents: a personal memory for every session on this "
             "machine, and a team memory that agents search and add to. Based on OptMem by Victor Taelin."
         ),
-        version="0.7.3",
+        version="0.7.4",
         alias="memo",
         symbols=[vis.Symbol(Memo(base=vis.workspace_root), name="memo")],
         prompt=_prompt,
